@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#070405">
+<title>Buckshot Roulette</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#070405;--panel:#150d0d;--edge:#3a2220;--edge2:#5a2a26;--blood:#c1121f;--blood2:#ff3b30;--bone:#e6dccd;--dim:#8d7f74;--rust:#b08a52}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--bone);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;background:radial-gradient(ellipse at 50% 28%,transparent 34%,rgba(0,0,0,.78) 100%)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:51;opacity:.08;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+.lamp{position:fixed;top:-150px;left:50%;transform:translateX(-50%);width:460px;height:460px;border-radius:50%;background:radial-gradient(circle,rgba(255,170,90,.24),rgba(255,120,40,.06) 45%,transparent 70%);animation:flick 7s infinite;pointer-events:none;z-index:0}
+@keyframes flick{0%,100%{opacity:1}7%{opacity:.7}9%{opacity:1}42%{opacity:.85}44%{opacity:.5}46%{opacity:1}78%{opacity:.9}}
+#app{position:relative;z-index:1;height:var(--tg-viewport-stable-height,100dvh);height:100dvh;max-width:520px;margin:0 auto;display:flex;flex-direction:column}
+.ttl{font-family:Cinzel,"Palatino Linotype",Palatino,Georgia,serif;letter-spacing:.14em;text-transform:uppercase}
+.dim{color:var(--dim)}
+button{font-family:inherit}
+input{-webkit-user-select:text;user-select:text}
+.btn{appearance:none;display:block;width:100%;border:1px solid var(--edge2);background:linear-gradient(#251615,#170e0e);color:var(--bone);padding:14px 16px;border-radius:12px;font-weight:700;font-size:15px;letter-spacing:.05em;cursor:pointer;margin-top:10px;transition:transform .1s}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:linear-gradient(#b3171c,#6e0b10);border-color:#e0383d;color:#fff;box-shadow:0 0 22px rgba(193,18,31,.38)}
+.btn.fire{font-size:16px;padding:16px;animation:pulse 1.7s infinite}
+.btn.ghost{background:transparent;border-color:var(--edge)}
+.btn.small{width:auto;display:inline-block;padding:8px 12px;font-size:13px;margin:0}
+.btn:disabled{opacity:.35;box-shadow:none;animation:none;cursor:default}
+@keyframes pulse{50%{box-shadow:0 0 32px rgba(255,59,48,.6)}}
+.ic{appearance:none;background:none;border:1px solid var(--edge);color:var(--bone);border-radius:10px;width:38px;height:38px;font-size:17px}
+/* HOME */
+.home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;overflow:auto}
+.home h1{margin:6px 0 4px;font-size:34px;line-height:1.1;color:#f1e6d6;text-shadow:0 0 24px rgba(193,18,31,.7)}
+.home .tag{color:var(--dim);font-style:italic;margin:0 0 14px;font-size:14px;line-height:1.5}
+.skull{font-size:54px;filter:drop-shadow(0 0 14px rgba(193,18,31,.8));animation:flick 5s infinite}
+.home .col{width:100%;max-width:340px}
+.join{display:flex;gap:8px;margin-top:10px}
+.join input{flex:1;min-width:0;background:#120a0a;border:1px solid var(--edge2);border-radius:12px;color:var(--bone);font:700 18px inherit;letter-spacing:.35em;text-align:center;text-transform:uppercase;padding:12px}
+.join .btn{width:auto;margin:0;padding:12px 18px}
+.link{background:none;border:0;color:var(--dim);margin-top:16px;font-size:14px;text-decoration:underline}
+.shotgun{width:100%;max-width:300px;height:auto;margin:6px 0 10px;filter:drop-shadow(0 6px 10px #000)}
+/* LOBBY */
+.lobby{flex:1;min-height:0;overflow:auto;padding:16px 14px 20px}
+.lobby .hd{text-align:center;margin-bottom:12px}
+.lobby .hd .t{font-size:13px;color:var(--dim)}
+.code{display:inline-block;font:800 34px Georgia,serif;letter-spacing:.3em;margin-top:4px;padding:6px 14px 6px 22px;border:1px dashed var(--edge2);border-radius:12px;color:#f1e6d6;text-shadow:0 0 14px rgba(193,18,31,.6)}
+.srow{display:flex;align-items:center;gap:10px;background:linear-gradient(#1a1010,#110a0a);border:1px solid var(--edge);border-radius:12px;padding:9px 10px;margin-top:7px}
+.srow.empty{opacity:.4;border-style:dashed}
+.av{width:36px;height:36px;border-radius:50%;background:#2a1513;border:1px solid var(--edge2);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--rust)}
+.srow .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .mini{appearance:none;background:none;border:1px solid var(--edge);color:var(--bone);border-radius:8px;width:34px;height:34px;font-size:15px}
+.seg{display:flex;margin-top:14px;border:1px solid var(--edge2);border-radius:12px;overflow:hidden}
+.seg button{flex:1;padding:12px 4px;background:#120a0a;color:var(--dim);border:0;font-weight:700;font-size:14px}
+.seg button.on{background:linear-gradient(#b3171c,#6e0b10);color:#fff}
+.modeinfo{font-size:12.5px;color:var(--dim);text-align:center;margin:8px 4px 0;line-height:1.45}
+/* GAME */
+.top{display:flex;align-items:center;justify-content:space-between;padding:10px 10px 6px;padding-top:max(10px,env(safe-area-inset-top))}
+.top .rd{font-size:14px;text-align:center}
+.top .hc{display:inline-block;margin-left:6px;color:var(--blood2);font-size:12px}
+.main{flex:1;min-height:0;overflow-y:auto;padding-bottom:8px}
+.score{display:flex;gap:6px;overflow-x:auto;padding:2px 10px 8px;font-size:12px}
+.chip{flex:none;border:1px solid var(--edge);border-radius:20px;padding:3px 9px;color:var(--dim)}
+.seats{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 10px}
+.seat{position:relative;background:linear-gradient(#1a1010,#110a0a);border:1px solid var(--edge);border-radius:12px;padding:9px 10px;min-height:84px;transition:border-color .2s,box-shadow .2s}
+.seat.cur{border-color:var(--blood2);box-shadow:0 0 0 1px rgba(255,59,48,.35),0 0 20px rgba(193,18,31,.4)}
+.seat.sel{outline:2px solid var(--rust);outline-offset:1px}
+.seat.dead{filter:grayscale(1) brightness(.5)}
+.seat .nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seat.dead .nm{text-decoration:line-through}
+.seat small{color:var(--dim);font-weight:400}
+.hp{display:flex;gap:4px;margin:7px 0 5px;min-height:10px}
+.pip{width:16px;height:9px;border-radius:2px;background:#e0262c;box-shadow:0 0 7px #ff3b30}
+.pip.off{background:#2a1c1b;box-shadow:none}
+.rip{font-size:12px}
+.its{display:flex;flex-wrap:wrap;gap:3px;font-size:15px;min-height:18px}
+.bds{position:absolute;top:6px;right:7px;font-size:11px}
+.bd{margin-left:4px}
+.aimed{outline:2px solid var(--blood2);outline-offset:2px;animation:aim-pulse .7s ease-in-out 2 both}
+@keyframes aim-pulse{0%,100%{box-shadow:0 0 0 rgba(255,59,48,0)}50%{box-shadow:0 0 22px rgba(255,59,48,.72)}}
+.hit{animation:hit .6s}
+@keyframes hit{0%{background:#8a0f14}100%{background:#110a0a}}
+.gun{margin:10px 10px 0;background:linear-gradient(#150c0c,#0d0707);border:1px solid var(--edge);border-radius:14px;padding:10px 10px 12px;text-align:center}
+.gun .shotgun{max-width:260px;margin:0 auto}
+.stock-avatar-ring{filter:drop-shadow(0 1px 3px #000)}.stock-avatar-ring circle:first-child{fill:#160d0b;stroke:#c49a61;stroke-width:2.2}.stock-avatar-ring circle:nth-child(2){fill:none;stroke:#f1d4a0;stroke-opacity:.42;stroke-width:1}.stock-avatar-text{fill:#f4dfbd;font:800 15px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;letter-spacing:.3px}.gun.sawed-blast .gun-caption{color:#ff9a65;text-shadow:0 0 14px #e43b20}
+.gcount{font-size:12.5px;color:var(--dim);margin:4px 0 8px}
+.shells{display:flex;justify-content:center;gap:5px;flex-wrap:wrap;min-height:54px}
+.shell{position:relative;width:20px;height:48px;border-radius:5px 5px 3px 3px;background:linear-gradient(90deg,#241817,#3a2826,#241817);border:1px solid #4a3330;display:flex;align-items:center;justify-content:center;font-size:11px;color:#6d5a52}
+.shell::after{content:"";position:absolute;left:-1px;right:-1px;bottom:-1px;height:14px;border-radius:0 0 3px 3px;background:linear-gradient(90deg,#7a5e2f,#c9a45c,#7a5e2f)}
+.shell.fired{border-color:transparent}
+.shell.fired.live{background:linear-gradient(90deg,#7d0e13,#e0262c,#7d0e13);box-shadow:0 0 9px rgba(224,38,44,.6);color:transparent}
+.shell.fired.blank{background:linear-gradient(90deg,#8d8780,#e8e2d8,#8d8780);color:transparent}
+.shell.now{border-color:var(--rust);box-shadow:0 0 10px rgba(176,138,82,.7);transform:translateY(-4px)}
+.shell.kn{border-color:currentColor}
+.shell.kn.live{color:#ff3b30;box-shadow:0 0 8px #ff3b30}
+.shell.kn.blank{color:#e8e2d8;box-shadow:0 0 8px #e8e2d8}
+.log{margin:10px 10px 0;padding:8px 10px;background:#0c0707;border:1px solid var(--edge);border-radius:12px;font-size:12.5px;line-height:1.5;color:var(--dim)}
+.log .ln:last-child{color:var(--bone)}
+.dock{flex:none;background:linear-gradient(#0f0808,#090505);border-top:1px solid var(--edge2);padding:8px 10px;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+.yt{font-size:13px;color:var(--blood2);letter-spacing:.2em;font-weight:800;text-align:center;animation:flick 3s infinite}
+.wt{font-size:13px;text-align:center;color:var(--dim)}
+.tg{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px}
+.tgb{flex:none;appearance:none;border:1px solid var(--edge2);background:#170e0e;color:var(--bone);border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600}
+.tgb.on{background:#5a1216;border-color:var(--blood2);color:#fff}
+.items{display:flex;gap:8px;overflow-x:auto;padding:8px 0 2px;min-height:78px}
+.icard{flex:none;width:74px;background:linear-gradient(#211413,#140c0c);border:1px solid var(--edge2);border-radius:12px;padding:7px 3px;text-align:center}
+.icard .e{font-size:24px}.icard .n{font-size:11px;color:var(--dim);margin-top:2px}
+.icard.off{opacity:.45}
+.none{font-size:12.5px;color:var(--dim);padding:10px 0;text-align:center;width:100%}
+/* PHASE 3.7.5 — VISUAL DIRECTING */
+#modal.item-inspect .back{background:rgba(0,0,0,.88);backdrop-filter:blur(7px)}
+#modal.item-inspect .sheet.item-fullscreen{position:absolute;left:50%;top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(94vw,480px);max-width:480px;max-height:min(88dvh,760px);overflow:auto;border:1px solid rgba(190,132,83,.55);border-radius:22px;padding:clamp(18px,4vw,28px);padding-bottom:max(20px,env(safe-area-inset-bottom));box-shadow:0 24px 90px rgba(0,0,0,.8),0 0 48px rgba(193,18,31,.18);animation:item-full-in .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes item-full-in{from{opacity:0;transform:translate(-50%,-47%) scale(.96)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+#modal.item-inspect .item-detail-art{min-height:clamp(170px,32vh,250px);margin-bottom:18px}
+#modal.item-inspect .item-detail-emoji{font-size:clamp(78px,18vw,112px)}
+#modal.item-inspect .item-detail h3{font-size:clamp(22px,5vw,30px);margin:12px 0}
+#modal.item-inspect .item-detail-desc{font-size:15px;line-height:1.65;max-width:390px}
+#modal.item-inspect .item-use,#modal.item-inspect .item-target{min-height:52px}
+/* Ружьё всегда лежит на столе; цель отмечается прицельной меткой на карточке игрока. */
+.gun.aiming .gun-weapon{transform:none!important}
+.gun.aiming .gun-weapon .shotgun{animation:none}
+.target-sight{position:absolute;z-index:6;right:9px;top:50%;width:28px;height:28px;display:grid;place-items:center;transform:translateY(-50%);pointer-events:none;filter:drop-shadow(0 1px 4px #000);animation:sight-lock .34s ease-out both}
+.target-sight i{position:relative;display:block;width:17px;height:17px;border:1.5px solid rgba(255,105,88,.98);border-radius:50%;box-shadow:0 0 10px rgba(255,40,30,.58),inset 0 0 6px rgba(255,40,30,.22)}
+.target-sight i:before,.target-sight i:after{content:"";position:absolute;background:#ff7868;left:50%;top:50%;transform:translate(-50%,-50%)}
+.target-sight i:before{width:27px;height:1.5px}.target-sight i:after{width:1.5px;height:27px}
+.target-sight i{background:radial-gradient(circle,rgba(255,95,75,.28) 0 2px,transparent 3px)}
+@keyframes sight-lock{from{opacity:0;transform:translateY(-50%) scale(1.5)}to{opacity:1;transform:translateY(-50%) scale(1)}}
+.seat.sel{border-color:#d34a3d;box-shadow:inset 0 0 0 1px rgba(255,90,65,.22),0 0 0 1px rgba(255,70,50,.2),0 0 20px rgba(193,18,31,.24)}
+.seat.aimed{outline:1px solid rgba(255,90,70,.8);outline-offset:2px}
+.seat.steal-victim{border-color:#ff493f!important;box-shadow:0 0 0 2px rgba(255,59,48,.35),0 0 30px rgba(255,30,20,.5)!important;animation:steal-victim 1.35s ease-out}
+.seat.steal-thief{border-color:#d5a45f!important;box-shadow:0 0 24px rgba(213,164,95,.35)!important}
+@keyframes steal-victim{0%,35%{filter:brightness(1.8)}100%{filter:none}}
+.steal-flight{position:fixed;z-index:110;pointer-events:none;display:grid;place-items:center;width:48px;height:48px;border-radius:13px;border:1px solid rgba(231,180,111,.75);background:radial-gradient(circle,#49221a,#130a09);font-size:27px;box-shadow:0 8px 28px #000,0 0 22px rgba(193,18,31,.4);transition:left 1.18s cubic-bezier(.2,.8,.2,1),top 1.18s cubic-bezier(.2,.8,.2,1),transform 1.18s,opacity 1.18s}
+.steal-stamp{position:absolute;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);padding:6px 10px;border-radius:7px;background:#8e1118;color:#fff;font-size:10px;font-weight:950;letter-spacing:.18em;box-shadow:0 4px 14px #000;animation:stamp-in .38s ease-out}
+@keyframes stamp-in{from{opacity:0;transform:translate(-50%,-50%) scale(1.3)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+.director-callout{position:fixed;z-index:95;top:max(52px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:88vw;padding:9px 14px;border:1px solid rgba(190,132,83,.55);border-radius:12px;background:rgba(13,7,7,.94);color:#f0dfca;text-align:center;font-size:12px;font-weight:800;letter-spacing:.04em;box-shadow:0 8px 30px #000;pointer-events:none;animation:fxin .35s}
+@media(max-height:600px){#modal.item-inspect .sheet.item-fullscreen{max-height:94dvh;padding:14px}#modal.item-inspect .item-detail-art{min-height:130px}}
+@media(prefers-reduced-motion:reduce){#modal.item-inspect .sheet.item-fullscreen,.seat.steal-victim,.steal-flight,.steal-stamp,.director-callout{animation:none!important;transition:none!important}}
+/* OVERLAYS */
+#modal{position:fixed;inset:0;z-index:100;display:none}
+#modal.on{display:block}
+.back{position:absolute;inset:0;background:rgba(0,0,0,.75)}
+.sheet{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:520px;max-height:88%;overflow:auto;background:linear-gradient(#1c1212,#0e0808);border-top:1px solid var(--edge2);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));animation:up .22s}
+@keyframes up{from{transform:translate(-50%,40px);opacity:0}}
+.sheet h3{margin:6px 0;font-size:19px}
+.sheet p{margin:6px 0;color:#cfc3b3;line-height:1.5;font-size:14px}
+.big{font-size:52px;text-align:center}
+.sheet .c{text-align:center}
+.warn{background:#2a1010;border:1px solid var(--edge2);border-radius:10px;padding:9px 11px;margin-top:10px;font-size:13px;color:#e8a8a0}
+.reveal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86%;max-width:380px;text-align:center;padding:26px 18px;background:radial-gradient(#2a1210,#0d0707);border:1px solid var(--blood);border-radius:18px;box-shadow:0 0 50px rgba(193,18,31,.5);animation:pop .3s}
+@keyframes pop{from{transform:translate(-50%,-46%) scale(.9);opacity:0}}
+.reveal .v{font-size:28px;font-weight:800;margin:10px 0;letter-spacing:.05em}
+.reveal .h{color:var(--dim);font-size:14px;line-height:1.5}
+.veil{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,2,2,.9);text-align:center;padding:24px}
+.veil .col{width:100%;max-width:320px}
+.veil h2{font-size:26px;margin:8px 0;color:#f1e6d6;text-shadow:0 0 20px rgba(193,18,31,.8)}
+#fx{position:fixed;inset:0;z-index:80;pointer-events:none;overflow:hidden}
+.fxb{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);text-align:center;font-size:15px;padding:12px 18px;background:rgba(10,5,5,.92);border:1px solid var(--edge2);border-radius:14px;animation:fxin .25s;max-width:88%}
+.fxb .em{font-size:38px;display:block}
+.fxb.saw-boom{font-size:clamp(31px,9vw,46px);letter-spacing:.08em;color:#ffd2a0;text-shadow:0 0 8px #fff,0 0 24px #ff4b1f,0 0 48px #c1121f;transform:translate(-50%,-50%) rotate(-3deg);}
+.fxb.boom{font-size:46px;font-weight:900;letter-spacing:.15em;color:#ff3b30;border-color:var(--blood2);text-shadow:0 0 24px #ff3b30;background:rgba(20,0,0,.8)}
+.fxb.click{color:#e6dccd;font-style:normal;font-size:30px;font-weight:900;letter-spacing:.12em;text-shadow:0 0 14px rgba(230,220,205,.35)}
+@keyframes fxin{from{opacity:0;transform:translate(-50%,-40%) scale(.9)}}
+.flt{position:absolute;font-size:30px;font-weight:900;color:#ff3b30;text-shadow:0 0 12px #000;animation:flt 1s forwards}
+@keyframes flt{to{transform:translateY(-50px);opacity:0}}
+#flash{position:fixed;inset:0;z-index:70;pointer-events:none;background:radial-gradient(#fff,#ff2b2b 40%,transparent 75%);opacity:0}
+#flash.on{animation:fl .5s}
+#flash.heavy{background:radial-gradient(ellipse at 50% 48%,#fff8d9 0%,#ffb347 18%,#e52a1e 43%,rgba(72,4,8,.15) 78%,transparent 100%)}
+#flash.heavy.on{animation:fl-heavy .62s ease-out}
+@keyframes fl-heavy{0%{opacity:1}28%{opacity:.88}100%{opacity:0}}
+@keyframes fl{0%{opacity:.95}100%{opacity:0}}
+.shake{animation:shk .5s}
+.shake.heavy{animation:shk-heavy .68s}
+@keyframes shk{10%,50%,90%{transform:translate(-6px,3px)}30%,70%{transform:translate(6px,-3px)}}
+@keyframes shk-heavy{0%,100%{transform:translate(0)}12%,52%,82%{transform:translate(-10px,5px) rotate(-.25deg)}30%,66%{transform:translate(10px,-5px) rotate(.25deg)}}
+#toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:120;background:#2a1010;border:1px solid var(--blood);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;max-width:88%;text-align:center;display:none}
+#net{position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:120;background:#2a1010;border:1px solid var(--blood);border-radius:10px;padding:4px 12px;font-size:12px;display:none}
+.rules h4{margin:14px 0 4px;color:var(--rust);letter-spacing:.1em;font-size:13px;text-transform:uppercase}
+.rules .it{display:flex;gap:10px;margin:7px 0;font-size:13.5px;line-height:1.4}
+.rules .it b{display:block}
+.rules .it span.e{font-size:22px;width:28px;text-align:center}
+
+/* MOBILE-FIRST UPDATE */
+:root{--ui-text:clamp(15px,3.9vw,17px);--ui-small:clamp(13px,3.4vw,15px);--ui-title:clamp(18px,4.8vw,22px)}
+#app{height:var(--tg-viewport-stable-height,100dvh);min-height:0;padding-bottom:env(safe-area-inset-bottom,0px)}
+.btn{min-height:50px;padding:14px 16px;font-size:clamp(16px,4vw,18px);letter-spacing:.025em}
+.btn.fire{min-height:56px;font-size:clamp(17px,4.5vw,19px)}
+.ic{width:44px;height:44px;font-size:19px;flex:none}
+.top{gap:10px;padding-left:12px;padding-right:12px}
+.top .rd{font-size:clamp(16px,4.2vw,19px)}
+.main{padding:0 0 10px;overscroll-behavior:contain}
+.score{font-size:var(--ui-small);padding:4px 12px 9px}
+.chip{padding:5px 11px}
+.seats{gap:9px;padding:0 12px}
+.seat{min-height:96px;padding:11px;border-radius:14px}
+.seathead{display:flex;align-items:center;gap:8px;min-width:0;min-height:28px}
+.seatav{width:28px;height:28px;flex:none;border-radius:50%;display:grid;place-items:center;background:#301715;border:1px solid var(--edge2);font-size:15px;color:var(--rust)}
+.seat .nm{font-size:clamp(15px,4vw,17px);padding-right:0;flex:1;min-width:0}
+.seathead .bds{position:static;flex:none}
+.hp{gap:5px;margin:8px 0 7px;min-height:12px}
+.pip{width:clamp(17px,4.8vw,22px);height:11px;border-radius:3px}
+.its{font-size:19px;gap:5px;min-height:22px}
+.bds{font-size:13px}
+.gun{margin:10px 12px 0;padding:12px;border-radius:16px}
+.gun .shotgun{max-width:min(82vw,320px)}
+.gcount{font-size:var(--ui-small);line-height:1.4;margin:7px 0}
+.shells{gap:4px;min-height:42px}
+.shell{width:17px;height:38px}
+.log{margin:10px 12px 0;padding:10px 12px;font-size:var(--ui-small);line-height:1.55;border-radius:13px}
+.loghead{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;color:var(--bone);font-size:var(--ui-small);font-weight:750}
+.logmore{background:none;border:0;color:var(--rust);font:inherit;text-decoration:underline;padding:4px 0;min-height:32px}
+.dock{position:relative;z-index:3;max-height:44dvh;overflow-y:auto;overscroll-behavior:contain;padding:10px 12px max(12px,env(safe-area-inset-bottom));box-shadow:0 -12px 28px rgba(0,0,0,.42)}
+.yt{font-size:clamp(15px,4vw,17px);letter-spacing:.13em}
+.wt{font-size:var(--ui-small);line-height:1.4}
+.tg{gap:8px;padding:9px 0 4px}
+.tgb{min-height:46px;padding:10px 14px;font-size:var(--ui-small);border-radius:12px}
+.items{gap:8px;min-height:80px;padding:8px 0 3px}
+.icard{width:82px;min-height:76px;padding:8px 5px;border-radius:13px}
+.icard .e{font-size:28px}.icard .n{font-size:13px;line-height:1.2;margin-top:4px}
+.none{font-size:var(--ui-small)}
+.sheet{max-height:90dvh;padding:20px 18px calc(22px + env(safe-area-inset-bottom))}
+.sheet p,.warn{font-size:var(--ui-text);line-height:1.5}
+.rules .it{font-size:var(--ui-text);line-height:1.5}
+.rules h4{font-size:14px}
+.reveal .v{font-size:clamp(26px,7vw,32px)}
+#toast{font-size:var(--ui-text);bottom:calc(46dvh + 14px);padding:12px 16px}
+.seat:focus-visible,.btn:focus-visible,.tgb:focus-visible,.icard:focus-visible{outline:2px solid var(--rust);outline-offset:2px}
+@media(min-width:600px){#app{border-left:1px solid #241716;border-right:1px solid #241716}.dock{max-height:40dvh}.main{padding-bottom:14px}}
+@media(max-height:700px){.dock{max-height:48dvh}.gun{margin-top:7px;padding:8px}.gun .shotgun{max-height:62px}.seat{min-height:82px}.log{margin-top:7px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+/* CINEMATIC PLAYER CARDS — PHASE 3.2 */
+.seats{gap:10px;padding:2px 12px 0}
+.seat{isolation:isolate;overflow:hidden;min-height:116px;padding:12px 12px 10px;border-color:#49302b;background:linear-gradient(145deg,rgba(39,23,21,.98),rgba(13,8,8,.98) 72%);box-shadow:inset 0 1px 0 rgba(255,220,180,.055),0 8px 18px rgba(0,0,0,.24)}
+.seat::before{content:"";position:absolute;z-index:-1;inset:0;opacity:.45;background:radial-gradient(ellipse at 12% 0%,rgba(176,138,82,.18),transparent 58%);pointer-events:none}
+.seat::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(transparent,#72513b,transparent);opacity:.45}
+.seat.cur{border-color:#bd3932;box-shadow:inset 0 0 0 1px rgba(255,70,55,.2),0 0 0 1px rgba(255,59,48,.16),0 0 24px rgba(193,18,31,.28)}
+.seat.cur::after{background:linear-gradient(transparent,#ff5147,transparent);opacity:1;box-shadow:0 0 12px #c1121f}
+.seat.cur .seatav{border-color:#e05b4c;box-shadow:0 0 0 3px rgba(193,18,31,.13),0 0 18px rgba(193,18,31,.28);color:#ffe0ca}
+.seat.dead{filter:grayscale(.9) brightness(.48)}
+.seathead{position:relative;display:flex;align-items:center;gap:9px;min-width:0;min-height:36px}
+.seatav{position:relative;width:36px;height:36px;border-radius:50%;font-size:17px;font-weight:850;letter-spacing:.02em;background:radial-gradient(circle at 35% 25%,#69402d,#251311 72%);border:1px solid #8c5b3b;color:#f0c99b;box-shadow:inset 0 1px 5px rgba(255,220,170,.15),0 3px 8px #000;flex:none;display:grid;place-items:center;padding:0;font-family:inherit}.seatav.pickable{cursor:pointer;touch-action:manipulation;transition:transform .18s,border-color .18s,box-shadow .18s}.seatav.pickable:active{transform:scale(.9)}.seatav.pickable:focus-visible{outline:2px solid #f2c27e;outline-offset:3px}
+.seat .nm{font-size:clamp(14px,3.8vw,16px);font-weight:800;letter-spacing:.01em;line-height:1.2;padding-right:0;flex:1;min-width:0}
+.seat .nm small{display:block;margin-top:3px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#c79b70}
+.seathead .bds{position:static;flex:none;display:flex;gap:3px;align-items:center;margin-left:auto}
+.bd{margin:0;font-size:12px;filter:drop-shadow(0 1px 3px #000)}
+.seat-meta{display:flex;justify-content:space-between;align-items:center;margin-top:9px;gap:8px;color:#9d8879;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.seat-meta .turn-label{color:#ff8275;font-weight:850}
+.seat .hp{align-items:center;gap:5px;margin:7px 0 5px;min-height:13px}
+.seat .pip{width:clamp(16px,4.3vw,20px);height:9px;border-radius:2px;background:linear-gradient(180deg,#ff665b,#a70f18);box-shadow:0 0 8px rgba(255,49,45,.35),inset 0 1px 1px rgba(255,255,255,.25)}
+.seat .pip.off{background:linear-gradient(#332523,#1c1211);box-shadow:inset 0 1px 2px #080505;border:1px solid #49312c}
+.seat .hp-count{font-size:10px;color:#c9a58b;margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+.seat .its{display:flex;align-items:center;gap:4px;min-height:22px;font-size:16px}
+.seat .its span{display:grid;place-items:center;min-width:21px;height:21px;padding:0 3px;border-radius:5px;background:rgba(0,0,0,.24);border:1px solid rgba(176,138,82,.15)}
+.seat.sel .seatav{border-color:#ffd18a;box-shadow:0 0 0 3px rgba(255,185,100,.18),0 0 18px rgba(255,155,65,.32)}
+.seat.aimed{outline:1px solid #ff6b5d;outline-offset:1px;box-shadow:0 0 24px rgba(255,45,35,.5),inset 0 0 22px rgba(193,18,31,.18)}
+.seat.impact{animation:seat-impact .72s ease-out}
+@keyframes seat-impact{0%{background:#9b1519;box-shadow:0 0 0 2px #ff6b5d,0 0 36px rgba(255,30,20,.8)}35%{transform:translateX(2px)}65%{transform:translateX(-2px)}100%{transform:none}}
+.seat.eliminated{animation:seat-fall .9s ease-out}
+@keyframes seat-fall{0%{filter:brightness(1.5)}35%{transform:translateY(3px) rotate(-.5deg)}100%{transform:none;filter:grayscale(1) brightness(.48)}}
+.gun.fire-live .gun-weapon{animation:weapon-kick .42s ease-out}
+.gun.sawed-blast .gun-weapon{animation:sawed-kick .68s cubic-bezier(.16,.8,.25,1)}
+.gun.sawed-blast .muzzle-flash{width:158px;height:126px;right:25%;animation:sawed-double-burst .62s ease-out forwards}
+.gun.sawed-blast .muzzle-smoke{width:112px;height:76px;right:25%;filter:blur(10px)}
+@keyframes sawed-kick{0%,100%{transform:translate(0,0)}12%{transform:translate(-18px,3px)}28%{transform:translate(4px,-1px)}48%{transform:translate(-12px,2px)}66%{transform:translate(3px,0)}82%{transform:translate(-2px,0)}}
+@keyframes sawed-double-burst{0%,100%{opacity:0;transform:scale(.15) rotate(-18deg)}12%{opacity:1;transform:scale(1.4) rotate(7deg)}28%{opacity:.12;transform:scale(.65) rotate(-5deg)}43%{opacity:1;transform:scale(1.55) rotate(9deg)}62%{opacity:.72;transform:scale(1.2) rotate(-6deg)}82%{opacity:.25;transform:scale(1.9) rotate(12deg)}}
+.gun.fire-blank .gun-weapon{animation:weapon-click .28s ease-out}
+@keyframes weapon-kick{0%,100%{transform:rotate(var(--aim-angle,0deg))}24%{transform:rotate(var(--aim-angle,0deg)) translateX(-9px)}55%{transform:rotate(var(--aim-angle,0deg)) translateX(3px)}}
+@keyframes weapon-click{0%,100%{transform:rotate(var(--aim-angle,0deg))}45%{transform:rotate(var(--aim-angle,0deg)) translateY(3px)}}
+/* PHASE 3.5 — muzzle flash, ejected casing and impact language */
+.gun{overflow:visible}
+.gun-weapon{overflow:visible}
+.gun.muzzle-on::before{opacity:.7;background:radial-gradient(ellipse at var(--muzzle-x,94%) 42%,rgba(255,171,72,.42),transparent 35%),repeating-linear-gradient(7deg,transparent 0 13px,rgba(191,125,74,.09) 14px,transparent 16px 29px)}
+.muzzle-flash{position:absolute;z-index:4;right:4%;top:25%;width:92px;height:76px;pointer-events:none;opacity:0;transform:scale(.25);filter:blur(.2px);background:radial-gradient(ellipse at 50% 50%,#fff9d7 0 5%,#ffd36b 13%,rgba(255,91,26,.88) 29%,rgba(193,18,31,.35) 48%,transparent 72%);clip-path:polygon(50% 0,59% 34%,100% 12%,68% 48%,96% 76%,56% 62%,43% 100%,39% 62%,0 82%,32% 46%,5% 18%,44% 35%)}
+.gun.muzzle-on .muzzle-flash{animation:muzzle-burst .24s ease-out forwards}
+@keyframes muzzle-burst{0%{opacity:0;transform:scale(.18) rotate(-12deg)}22%{opacity:1;transform:scale(1.22) rotate(4deg)}100%{opacity:0;transform:scale(1.65) rotate(12deg)}}
+.muzzle-smoke{position:absolute;z-index:3;right:5%;top:30%;width:76px;height:48px;border-radius:50%;pointer-events:none;background:radial-gradient(ellipse,rgba(185,176,164,.42),rgba(112,102,96,.18) 45%,transparent 72%);filter:blur(8px);opacity:0;animation:smoke-drift .85s ease-out forwards}
+@keyframes smoke-drift{0%{opacity:0;transform:translate(0,0) scale(.35)}22%{opacity:.7}100%{opacity:0;transform:translate(24px,-19px) scale(1.8)}}
+.shell-casing{position:absolute;z-index:5;right:39%;top:55%;width:9px;height:23px;border-radius:3px 3px 2px 2px;border:1px solid #d7b56e;background:linear-gradient(90deg,#765027,#e7c16c,#8b5a29);box-shadow:0 2px 5px #000;pointer-events:none;animation:casing-eject .68s cubic-bezier(.2,.7,.25,1) forwards}
+.shell-casing::after{content:"";position:absolute;left:-1px;right:-1px;top:2px;height:3px;background:#f2d99a}
+@keyframes casing-eject{0%{opacity:0;transform:translate(0,0) rotate(0) scale(.7)}15%{opacity:1}55%{transform:translate(-32px,-32px) rotate(190deg)}100%{opacity:0;transform:translate(-56px,22px) rotate(390deg)}}
+.gun.fire-blank .gun-weapon{filter:brightness(1.12)}
+.seat.near-miss{animation:near-miss .55s ease-out}
+@keyframes near-miss{0%{border-color:#d9d0c5;box-shadow:0 0 20px rgba(230,220,205,.35)}45%{border-color:#bda58d}100%{border-color:var(--edge)}}
+.seat.impact{will-change:transform,filter}
+@media(prefers-reduced-motion:reduce){.muzzle-flash,.muzzle-smoke,.shell-casing,.seat.near-miss{animation:none!important;display:none!important}}
+@media(max-width:360px){.seat{padding:10px;min-height:108px}.seatav{width:32px;height:32px}.seat-meta{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.seat.impact,.seat.eliminated,.gun.fire-live .gun-weapon,.gun.fire-blank .gun-weapon,.gun.sawed-blast .gun-weapon,.gun.sawed-blast .muzzle-flash{animation:none!important}.gun.aiming .gun-weapon{transition:none!important}}
+
+/* Профили, готовность и настройки */
+.profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
+.statbox{background:#1b1110;border:1px solid var(--edge);border-radius:12px;padding:12px;text-align:center}
+.statbox b{display:block;font-size:24px;color:#fff}
+.statbox span{font-size:12px;color:var(--dim)}
+.ach{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--edge);border-radius:11px;margin-top:7px;background:#140c0c}
+.ach .ai{font-size:24px;width:32px;text-align:center}.ach .ad{flex:1;font-size:13px;color:var(--dim)}.ach.done{border-color:#75502b;background:#21170f}.ach.done .ad b{color:#e6c18c}
+.rankrow{display:grid;grid-template-columns:30px 1fr auto;gap:9px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--edge);font-size:14px}
+.rankrow .rank{color:var(--rust);font-weight:800}.rankrow .score{font-weight:800;color:#fff}
+.srow .ready{font-size:11px;color:#8dc99b;margin-left:auto;white-space:nowrap}.srow .notready{font-size:11px;color:#d7a27c;margin-left:auto;white-space:nowrap}
+.spectator-tag{font-size:11px;color:#b9a58b;border:1px solid var(--edge2);border-radius:20px;padding:4px 7px}
+.settings-line{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--edge)}
+.settings-line span{font-size:14px}.settings-line .btn{width:auto;min-width:112px;margin:0;padding:10px 12px;font-size:13px}
+.matchrow{padding:11px 3px;border-bottom:1px solid var(--edge);font-size:13px;line-height:1.5}
+.matchrow .muted{color:var(--dim);font-size:12px}
+
+
+/* CINEMATIC TABLE + WEAPON — phase 3.1 */
+.gun{
+  position:relative;isolation:isolate;overflow:hidden;margin:13px 12px 0;padding:13px 12px 14px;
+  border:1px solid rgba(153,104,68,.42);border-radius:17px;text-align:center;
+  background:
+    radial-gradient(ellipse at 50% 22%,rgba(255,184,105,.13),transparent 48%),
+    linear-gradient(155deg,rgba(56,29,21,.96),rgba(20,11,10,.98) 44%,rgba(8,6,6,.99));
+  box-shadow:inset 0 1px 0 rgba(255,220,174,.09),inset 0 -18px 35px rgba(0,0,0,.56),0 14px 30px rgba(0,0,0,.4);
+}
+.gun::before{content:"";position:absolute;inset:0;z-index:-1;opacity:.25;pointer-events:none;background:repeating-linear-gradient(7deg,transparent 0 13px,rgba(191,125,74,.09) 14px,transparent 16px 29px),linear-gradient(90deg,transparent,rgba(0,0,0,.2),transparent)}
+.gun::after{content:"";position:absolute;inset:5px;border:1px solid rgba(214,166,112,.09);border-radius:12px;pointer-events:none}
+.scene-kicker{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:9px;color:#a58a70;font-size:9px;font-weight:800;letter-spacing:.32em}
+.scene-kicker span{width:25px;height:1px;background:linear-gradient(90deg,transparent,#98704b)}
+.scene-kicker span:last-child{transform:scaleX(-1)}
+.gun-light{position:absolute;z-index:-1;top:-100px;left:50%;width:310px;height:230px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(255,184,112,.19),rgba(191,83,36,.06) 45%,transparent 72%);filter:blur(7px);pointer-events:none}
+.gun-plaque{position:relative;margin:6px auto 0;color:rgba(218,190,157,.46);font-size:9px;letter-spacing:.38em;text-shadow:0 1px 3px #000}
+.gun-weapon{position:relative;display:flex;align-items:center;justify-content:center;min-height:92px;margin:0 -2px;padding:3px 0 0;perspective:500px}
+/* Патроны расположены прямо на дробовике; при перезарядке по одному входят в казённую часть. */
+.gun .shells-on-gun{position:absolute;z-index:4;left:30%;right:3%;bottom:3px;display:flex;align-items:flex-end;justify-content:center;gap:clamp(2px,.9vw,6px);min-height:29px;padding:0;border:0;pointer-events:none;}
+.gun .shells-on-gun .shell{width:clamp(9px,2.7vw,14px);height:clamp(22px,6vw,29px);border-radius:4px 4px 2px 2px;font-size:8px;box-shadow:0 2px 5px #000;opacity:.96;}
+.gun .shells-on-gun .shell::after{height:7px;}
+.gun.reloading .gun-weapon .shotgun,body.reloading .gun .gun-weapon .shotgun{animation:reload-rack .72s ease-in-out both;}
+@keyframes reload-rack{0%,100%{transform:translateY(0) rotate(0)}22%{transform:translateY(2px) rotate(.7deg)}48%{transform:translateY(-2px) rotate(-.5deg)}72%{transform:translateY(1px) rotate(.25deg)}}
+.reload-shell{position:absolute;z-index:8;width:12px;height:27px;border-radius:4px 4px 2px 2px;border:1px solid #d9b56d;background:linear-gradient(90deg,#7b2522,#c54a37 38%,#5c1718);box-shadow:0 2px 8px #000,0 0 9px rgba(216,145,73,.35);pointer-events:none;}
+.reload-shell::after{content:"";position:absolute;left:-1px;right:-1px;bottom:-1px;height:7px;border-radius:0 0 2px 2px;background:linear-gradient(90deg,#77512b,#e1bd73,#80572f);}
+.reload-shell.blank{background:linear-gradient(90deg,#77716a,#d8d1c5 45%,#77716a);border-color:#d8d0c2;}
+.reload-shell.neutral{background:linear-gradient(90deg,#66584a,#b9a58b 45%,#66584a);border-color:#c2a984;}
+.reload-shell.neutral::after{background:linear-gradient(90deg,#765f3e,#c4a36b,#765f3e);}
+.gun.reloading .gun-plaque,body.reloading .gun .gun-plaque{color:#e4bd85;text-shadow:0 0 12px rgba(255,176,89,.55);}
+.gun.reloading .gun-caption,body.reloading .gun .gun-caption{color:#e0b77f;}
+@media(prefers-reduced-motion:reduce){.gun.reloading .gun-weapon .shotgun,body.reloading .gun .gun-weapon .shotgun{animation:none!important}.reload-shell{display:none!important}}
+
+.gun .shotgun{position:relative;z-index:1;display:block;width:min(100%,390px);max-width:390px;height:auto;margin:0 auto;filter:drop-shadow(0 9px 7px rgba(0,0,0,.9)) drop-shadow(0 0 12px rgba(210,139,77,.12));animation:weapon-settle .8s cubic-bezier(.2,.75,.25,1) both}
+@keyframes weapon-settle{from{opacity:.5;transform:translateY(8px) rotateX(7deg)}to{opacity:1;transform:translateY(0) rotateX(0)}}
+.gun-caption{position:relative;margin:-1px 0 7px;color:#9e8063;font-size:9px;font-weight:800;letter-spacing:.24em}
+.gcount{position:relative;z-index:1;color:#c2ad99;font-size:var(--ui-small,13px);line-height:1.45;margin:5px 0 8px}
+.gun .shells{position:relative;z-index:1;padding-top:8px;border-top:1px solid rgba(171,119,78,.16)}
+ .gun .shell{box-shadow:0 5px 8px rgba(0,0,0,.38)}
+/* Миниатюрная лента проходит над стволами, не закрывая оружие и не занимая место под ним. */
+.gun .shells-on-gun{position:absolute;z-index:4;left:39%;right:4%;top:1px;bottom:auto;display:flex;flex-wrap:nowrap;align-items:flex-start;justify-content:flex-start;gap:clamp(2px,.65vw,5px);min-height:0;padding:0;border:0;pointer-events:none;}
+.gun .shells-on-gun .shell{flex:0 1 clamp(7px,2vw,10px);width:clamp(7px,2vw,10px);height:clamp(15px,4vw,19px);min-width:0;border-radius:3px 3px 2px 2px;font-size:0;opacity:.96;transform:none;}
+.gun .shells-on-gun .shell::after{height:4px;}
+.gun .shells-on-gun .shell.now{transform:translateY(-2px);}
+.gun .shells-on-gun .shell-muted{background:linear-gradient(90deg,#34251d,#66503b,#34251d);border:1px solid #806346;box-shadow:0 2px 5px #000;}
+.gun .shells-on-gun .shell-muted::after{background:linear-gradient(90deg,#76552d,#b99558,#76552d);}
+
+@media(max-width:380px){.gun{margin-left:9px;margin-right:9px;padding:11px 8px 12px}.gun-weapon{min-height:78px}.gun .shotgun{max-width:100%}.scene-kicker{font-size:8px}}
+@media(max-height:700px){.gun{padding-top:9px;padding-bottom:9px}.gun-weapon{min-height:70px}.gun-plaque{margin-top:3px}.gun-caption{margin-bottom:4px}}
+@media(prefers-reduced-motion:reduce){.gun .shotgun{animation:none}}
+
+
+/* PHASE 3.4 — CINEMATIC ROUND & MATCH FINALES */
+.result-veil{z-index:90;overflow-y:auto;justify-content:center;padding:clamp(16px,4vh,34px) 18px max(20px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 28%,rgba(93,23,18,.48),transparent 48%),linear-gradient(180deg,rgba(7,3,3,.91),rgba(5,2,2,.97));isolation:isolate;animation:result-fade .55s ease both}
+.result-backlight{position:absolute;z-index:-2;top:8%;left:50%;width:min(92vw,440px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(171,48,27,.22),rgba(112,27,19,.07) 42%,transparent 70%);filter:blur(10px);animation:result-breathe 4s ease-in-out infinite}
+.result-grain{position:absolute;z-index:-1;inset:0;opacity:.12;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,220,180,.045) 4px,transparent 5px)}
+.result-col{position:relative;width:100%;max-width:360px;margin:auto;padding:clamp(16px,3vh,26px) 20px 20px;border:1px solid rgba(176,138,82,.28);border-radius:19px;background:linear-gradient(155deg,rgba(34,20,17,.97),rgba(12,7,7,.98) 65%);box-shadow:0 22px 70px rgba(0,0,0,.72),inset 0 1px rgba(255,224,188,.08);animation:result-rise .65s cubic-bezier(.18,.8,.22,1) both}
+.result-col::before{content:"";position:absolute;inset:5px;border:1px solid rgba(176,138,82,.1);border-radius:14px;pointer-events:none}
+.result-overline{display:flex;align-items:center;justify-content:center;gap:9px;color:#a98a70;font-size:9px;font-weight:900;letter-spacing:.25em;text-align:center}
+.result-overline span{width:22px;height:1px;background:linear-gradient(90deg,transparent,#a36b48)}
+.result-overline span:last-child{transform:rotate(180deg)}
+.result-emblem{position:relative;display:grid;place-items:center;width:86px;height:86px;margin:17px auto 10px;border-radius:50%;border:1px solid rgba(192,107,68,.42);background:radial-gradient(circle,rgba(130,37,28,.34),rgba(22,10,9,.75) 68%);box-shadow:0 0 36px rgba(147,34,25,.17),inset 0 0 20px rgba(193,18,31,.1)}
+.result-emblem>span{font-size:42px;filter:drop-shadow(0 4px 8px #000);animation:result-symbol .75s .2s cubic-bezier(.2,.8,.2,1) both}
+.crown-emblem{border-color:rgba(190,151,91,.65);background:radial-gradient(circle,rgba(164,111,48,.27),rgba(22,13,8,.8) 68%);box-shadow:0 0 42px rgba(188,139,64,.18)}
+.crown-emblem>span{font-size:54px;color:#d8b477;text-shadow:0 0 20px rgba(214,166,87,.4)}
+.crown-emblem>i{position:absolute;top:5px;right:10px;color:#f1d08c;font-size:18px;font-style:normal}
+.result-kicker{color:#b18a61;font-size:10px;font-weight:900;letter-spacing:.3em;text-align:center}
+.result-title{margin:7px 0 4px!important;color:#f2e5d2!important;font-size:clamp(23px,6vw,29px)!important;line-height:1.2;text-align:center;text-shadow:0 2px 18px rgba(193,18,31,.25)}
+.result-sub{margin:7px 0 14px;color:#9f8c7b;font-size:12px;line-height:1.45;text-align:center}
+.result-survivor{display:flex;flex-direction:column;align-items:center;gap:3px;margin:12px auto 15px;padding:12px 10px;border:1px solid rgba(190,113,65,.25);border-radius:12px;background:linear-gradient(100deg,rgba(76,27,19,.28),rgba(30,15,12,.65),rgba(76,27,19,.28))}
+.result-survivor b{font-family:Georgia,serif;font-size:21px;color:#f2d9bd}
+.result-survivor small{color:#c18462;font-size:8px;font-weight:900;letter-spacing:.25em}
+.survivor-mark{color:#d6ad72;font-size:18px}
+.result-divider{display:flex;align-items:center;gap:10px;margin:16px 0 9px;color:#8c715b;font-size:8px;font-weight:900;letter-spacing:.25em}
+.result-divider::before,.result-divider::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,transparent,rgba(176,138,82,.36))}
+.result-divider::after{transform:rotate(180deg)}
+.result-scoreboard{display:grid;gap:5px}
+.result-score{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid rgba(176,138,82,.12);border-radius:8px;background:rgba(0,0,0,.16);font-size:12px}
+.result-score b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cdbca8;font-weight:650}
+.result-score i{flex:none;color:#9b8069;font-size:9px;font-style:normal;font-weight:900;letter-spacing:.12em}
+.result-score.survivor{border-color:rgba(174,92,49,.35);background:rgba(105,39,24,.18)}
+.result-score.survivor b,.result-score.champion b{color:#f1d5ad}
+.result-score.champion{border-color:rgba(202,157,82,.45);background:rgba(119,81,32,.17)}
+.result-score.champion i{color:#d8b477}
+.result-footnote{margin:12px 0 3px;color:#806f62;font-size:10px;text-align:center}
+.result-action{display:flex;align-items:center;justify-content:center;gap:10px;min-height:53px;margin-top:16px;font-size:14px;letter-spacing:.08em;box-shadow:0 7px 24px rgba(137,12,19,.24)}
+.result-action span{font-size:18px}
+.result-action i{margin-left:auto;font-style:normal;font-size:19px}
+.result-wait{padding:13px 6px;color:#a98b70;font-size:12px;text-align:center}
+.champion-name{margin:9px 0 0;color:#f4d8a6;font-family:Georgia,serif;font-size:clamp(25px,7vw,34px);font-weight:700;line-height:1.15;text-align:center;text-shadow:0 0 24px rgba(206,153,72,.28);overflow-wrap:anywhere}
+.final-result .result-sub{margin-bottom:11px}
+.result-stamp{margin:14px 0 0;color:rgba(188,145,91,.48);font-family:Georgia,serif;font-size:9px;font-weight:900;letter-spacing:.34em;text-align:center}
+.result-secondary{min-height:42px;margin-top:8px;padding:10px;font-size:12px}
+@keyframes result-fade{from{opacity:0}to{opacity:1}}
+@keyframes result-rise{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes result-symbol{from{opacity:0;transform:scale(.5) rotate(-18deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes result-breathe{50%{transform:scale(1.12);opacity:.7}}
+@media(max-height:650px){.result-veil{justify-content:flex-start;padding-top:10px}.result-col{padding:13px 16px}.result-emblem{width:64px;height:64px;margin:8px auto}.result-emblem>span{font-size:34px}.crown-emblem>span{font-size:43px}.result-sub{margin:4px 0 8px}.result-survivor{margin:7px auto;padding:8px}.result-divider{margin:10px 0 7px}.result-score{padding:6px 9px}.result-action{margin-top:10px;min-height:47px}}
+@media(prefers-reduced-motion:reduce){.result-veil,.result-col,.result-emblem>span,.result-backlight{animation:none!important}}
+\n/* PHASE 3.3 — CINEMATIC INVENTORY */
+.inventory{margin-top:5px;padding-top:7px;border-top:1px solid rgba(176,138,82,.18)}
+.inventory-head{display:flex;justify-content:space-between;align-items:center;padding:0 2px;color:#9d8068}
+.inventory-title{font-size:10px;font-weight:900;letter-spacing:.24em}
+.inventory-total{font-size:10px;font-variant-numeric:tabular-nums;letter-spacing:.12em;color:#6e5a4e}
+.items{align-items:stretch;gap:9px;min-height:91px;padding:9px 1px 4px;scrollbar-width:thin;scrollbar-color:#68402e transparent}
+.icard{position:relative;isolation:isolate;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:88px;min-height:82px;padding:8px 5px 6px;overflow:hidden;appearance:none;color:var(--bone);background:linear-gradient(155deg,#30201b 0%,#1a100f 54%,#100909 100%);border:1px solid #62402f;border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,226,185,.1),0 5px 12px rgba(0,0,0,.25);cursor:pointer;transition:transform .16s,border-color .16s,box-shadow .16s}
+.icard::before{content:"";position:absolute;z-index:-1;inset:0;background:radial-gradient(circle at 50% 0%,rgba(255,178,103,.2),transparent 68%);opacity:.8}
+.icard:active{transform:translateY(2px) scale(.97);border-color:#d08c55}
+.icard .item-glint{position:absolute;top:-30%;left:-55%;width:45%;height:170%;transform:rotate(25deg);background:linear-gradient(90deg,transparent,rgba(255,231,195,.12),transparent);pointer-events:none}
+.icard .item-icon{font-size:29px;line-height:1.1;filter:drop-shadow(0 3px 4px #000);transition:transform .2s,filter .2s}
+.icard .item-name{max-width:100%;font-size:11px;line-height:1.15;font-weight:800;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;text-shadow:0 1px 3px #000}
+.icard .item-qty{position:absolute;top:5px;right:6px;min-width:18px;height:18px;padding:0 4px;display:grid;place-items:center;border-radius:9px;background:#8f171b;border:1px solid #d34b43;color:#fff;font-size:10px;font-weight:900}
+.icard .item-state{font-size:8px;line-height:1.2;letter-spacing:.12em;color:#a98b70;opacity:.8}
+.icard:not(.off):hover{border-color:#b77a4c;box-shadow:0 0 16px rgba(176,95,48,.18),inset 0 1px 0 rgba(255,226,185,.12)}
+.icard:not(.off):hover .item-icon{transform:translateY(-2px) scale(1.06);filter:drop-shadow(0 0 8px rgba(255,164,91,.55))}
+.icard.off{opacity:.48;filter:saturate(.45);border-style:dashed}
+.icard.off .item-state{color:#d18b80}
+.inventory .none{display:flex;align-items:center;justify-content:center;gap:8px;min-height:66px;border:1px dashed rgba(176,138,82,.2);border-radius:10px;color:#8d7f74}
+.inventory .none span{color:#9c7653;font-size:19px}
+.item-detail{padding:2px 0 4px}
+.item-detail-art{position:relative;display:flex;align-items:center;justify-content:center;min-height:132px;margin:0 -2px 8px;overflow:hidden;border:1px solid rgba(176,138,82,.22);border-radius:16px;background:radial-gradient(ellipse at 50% 40%,rgba(133,48,33,.36),transparent 58%),linear-gradient(145deg,#211412,#0c0707)}
+.item-detail-halo{position:absolute;width:112px;height:112px;border-radius:50%;background:radial-gradient(circle,rgba(255,135,76,.25),rgba(193,18,31,.08) 48%,transparent 72%);filter:blur(2px);animation:item-halo 3s ease-in-out infinite}
+.item-detail-emoji{position:relative;font-size:66px;filter:drop-shadow(0 8px 8px #000);animation:item-arrive .28s cubic-bezier(.2,.8,.2,1) both}
+.item-detail-count{position:absolute;right:10px;bottom:9px;color:#a88b72;font-size:9px;letter-spacing:.14em;font-weight:800}
+.item-detail-kicker{text-align:center;color:#a47a59;font-size:9px;font-weight:900;letter-spacing:.22em}
+.item-detail h3{margin:6px 0 5px}
+.item-detail-desc{max-width:360px;margin:0 auto 15px!important;color:#c9b9a7!important}
+.item-prompt{text-align:center;margin:14px 0 7px;color:#c59b72;font-size:10px;font-weight:900;letter-spacing:.2em}
+.item-use{display:flex;justify-content:space-between;align-items:center;padding:16px 18px}
+.item-target{margin-top:7px}
+.item-warning{display:flex;align-items:center;gap:10px;margin:12px 0;padding:12px;border:1px solid rgba(193,18,31,.45);border-radius:11px;background:linear-gradient(110deg,rgba(100,13,18,.38),rgba(28,12,12,.8));color:#e7b0a6}
+.item-warning>span{display:grid;place-items:center;width:25px;height:25px;flex:none;border-radius:50%;background:#6e1117;color:#fff;font-weight:900}
+.item-warning b,.item-warning small{display:block}
+.item-warning small{margin-top:3px;color:#c5a69a;line-height:1.4}
+.item-inspect-note{text-align:center;padding:12px 8px;margin:12px 0;border:1px solid rgba(176,138,82,.18);border-radius:10px;color:#a8917d;font-size:12px}
+@keyframes item-arrive{from{opacity:0;transform:translateY(8px) scale(.82)}to{opacity:1;transform:none}}
+@keyframes item-halo{50%{transform:scale(1.12);opacity:.7}}
+@media(max-width:360px){.icard{width:78px;min-height:78px}.icard .item-icon{font-size:26px}.icard .item-name{font-size:10px}.icard .item-state{font-size:7px}}
+@media(prefers-reduced-motion:reduce){.item-detail-halo,.item-detail-emoji{animation:none!important}}
+
+/* PHASE 3.7 — item action choreography */
+.item-burst{position:fixed;z-index:90;left:50%;top:43%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;min-width:150px;padding:18px 24px;border:1px solid rgba(190,145,89,.48);border-radius:18px;background:radial-gradient(ellipse at 50% 0,rgba(139,48,34,.5),transparent 70%),linear-gradient(145deg,rgba(35,20,17,.97),rgba(8,5,5,.97));box-shadow:0 18px 60px #000,0 0 34px rgba(193,18,31,.2);animation:item-burst-in .24s ease-out both}
+.item-burst .ib-icon{display:block;font-size:48px;line-height:1.25;filter:drop-shadow(0 0 14px rgba(255,180,100,.4))}
+.item-burst .ib-name{display:block;margin-top:7px;color:#e6c18b;font-size:11px;font-weight:900;letter-spacing:.2em;text-transform:uppercase}
+.item-burst .ib-note{display:block;margin-top:5px;color:#d8c9b8;font-size:12px}
+.item-burst.glass{box-shadow:0 18px 60px #000,0 0 35px rgba(100,190,255,.25)}
+.item-burst.med{box-shadow:0 18px 60px #000,0 0 35px rgba(90,220,150,.22)}
+.item-burst.saw{box-shadow:0 18px 60px #000,0 0 35px rgba(255,120,35,.28)}
+.item-burst.cuffs{box-shadow:0 18px 60px #000,0 0 35px rgba(160,170,190,.25)}
+@keyframes item-burst-in{from{opacity:0;transform:translate(-50%,-44%) scale(.78)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+.item-burst.out{animation:item-burst-out .22s ease-in forwards}
+@keyframes item-burst-out{to{opacity:0;transform:translate(-50%,-57%) scale(1.08)}}
+.seat.item-targeted{animation:item-target .72s ease-out}
+@keyframes item-target{0%{box-shadow:0 0 0 2px rgba(220,190,130,.7),0 0 28px rgba(220,190,130,.45)}100%{box-shadow:none}}
+.item-detail-art.item-preview{animation:item-preview .42s ease-out}
+@keyframes item-preview{0%{filter:brightness(1.6);transform:scale(.98)}55%{filter:brightness(1.18);transform:scale(1.015)}100%{filter:none;transform:none}}
+@media(prefers-reduced-motion:reduce){.item-burst,.seat.item-targeted,.item-detail-art.item-preview{animation:none!important}}
+/* Keep transient shot particles visible beyond the weapon panel edge. */
+.gun{overflow:visible}
+
+/* PHASE 3.7.6/3.7.7 — pacing, cinematic POV and lightweight modes */
+.pov-threat{position:fixed;inset:0;z-index:88;pointer-events:none;overflow:hidden;animation:pov-in .38s ease-out both}
+.pov-vignette{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 56%,transparent 15%,rgba(0,0,0,.72) 100%),linear-gradient(180deg,rgba(20,4,4,.08),rgba(35,0,0,.38));}
+.pov-muzzle{position:absolute;left:50%;top:50%;width:min(54vw,250px);aspect-ratio:1.5;transform:translate(-50%,-35%) perspective(280px) rotateX(12deg);border-radius:44% 44% 18% 18%;background:linear-gradient(180deg,#5b5650 0,#211d1b 16%,#090808 48%,#3c3028 62%,#100b09 100%);border:5px solid #51463b;box-shadow:0 18px 45px #000,0 0 30px rgba(193,18,31,.25)}
+.pov-muzzle:before,.pov-muzzle:after{content:"";position:absolute;top:9%;bottom:22%;width:32%;border-radius:50%;background:radial-gradient(circle at 50% 48%,#020202 0 42%,#655e55 48%,#171311 61%,#050505 72%);border:3px solid #81766a;box-shadow:inset 0 0 15px #000}
+.pov-muzzle:before{left:13%}.pov-muzzle:after{right:13%}
+.pov-muzzle i{position:absolute;left:50%;top:6%;bottom:18%;width:7px;transform:translateX(-50%);background:linear-gradient(90deg,#080808,#8c8175,#080808);z-index:2}
+.pov-muzzle b{position:absolute;left:50%;bottom:-28%;width:42%;height:48%;transform:translateX(-50%);border-radius:12px 12px 35% 35%;background:linear-gradient(90deg,#140b08,#754526 48%,#160c08);border:2px solid #120a08}
+.pov-label{position:absolute;left:50%;top:calc(50% + min(31vw,145px));transform:translateX(-50%);padding:9px 14px;border:1px solid rgba(255,90,70,.7);border-radius:10px;background:rgba(18,4,4,.9);color:#fff;font-size:12px;font-weight:900;letter-spacing:.12em;text-align:center;white-space:nowrap;text-shadow:0 2px 8px #000}
+.pov-threat.pov-blast .pov-vignette{background:radial-gradient(circle at 50% 50%,rgba(255,245,205,.98),rgba(255,94,40,.82) 22%,rgba(125,8,12,.6) 48%,rgba(0,0,0,.9) 100%);animation:pov-flash .42s ease-out both}
+.pov-threat.pov-blast .pov-muzzle{animation:pov-kick .38s ease-out both}
+@keyframes pov-in{from{opacity:0}to{opacity:1}}
+@keyframes pov-flash{0%{opacity:1}100%{opacity:0}}
+@keyframes pov-kick{to{transform:translate(-50%,-18%) scale(1.18);opacity:.25}}
+.gun.sawing .gun-weapon{animation:saw-recoil .22s ease-in-out 4 alternate}
+.gun.sawing .gun-weapon:after{content:"🪚";position:absolute;z-index:9;left:56%;top:5%;font-size:42px;filter:drop-shadow(0 5px 5px #000);animation:saw-pass .22s ease-in-out 4 alternate}
+@keyframes saw-recoil{to{transform:translateY(3px) rotate(-.7deg)}}
+@keyframes saw-pass{to{transform:translateX(20px) rotate(22deg)}}
+body[data-cinema="reduced"] .pov-threat{display:none}
+body[data-cinema="minimal"] .pov-threat,.motion-off .pov-threat{display:none}
+body[data-cinema="minimal"] .lamp{animation:none;opacity:.6}
+body[data-cinema="minimal"]:after{display:none}
+body[data-cinema="minimal"]:before{background:radial-gradient(ellipse at 50% 28%,transparent 42%,rgba(0,0,0,.62) 100%)}
+body[data-cinema="reduced"] .lamp{animation:none;opacity:.8}
+body[data-cinema="minimal"] .director-callout{box-shadow:none;backdrop-filter:none}
+.motion-off *, .motion-off *:before, .motion-off *:after{animation:none!important;scroll-behavior:auto!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){.pov-threat,.gun.sawing .gun-weapon:after{display:none!important}.gun.sawing .gun-weapon{animation:none!important}}
+@media(max-width:380px){.pov-muzzle{width:62vw}.pov-label{font-size:10px;letter-spacing:.06em;top:calc(50% + 34vw)}}
+
+</style>
+</head>
+<body>
+<div class="lamp"></div>
+<div id="app"></div>
+<div id="fx"></div><div id="flash"></div>
+<div id="modal"></div><div id="toast"></div><div id="net">⚠️ связь потеряна…</div>
+<script>
+"use strict";
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { try { tg.ready(); tg.expand(); tg.setHeaderColor("#070405"); tg.setBackgroundColor("#070405");
+  if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (e) {} }
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const ROMAN = ["","I","II","III","IV","V","VI","VII","VIII","IX","X"];
+const roman = n => ROMAN[n] || n;
+const ITEMS = {
+  glass:{e:"🔍",n:"Лупа",d:"Показывает текущий патрон. Результат видите только вы."},
+  beer:{e:"🍺",n:"Пиво",d:"Выбрасывает текущий патрон. Все видят, какой он был."},
+  cig:{e:"🚬",n:"Сигареты",d:"+1 жизнь (не выше максимума)."},
+  cuffs:{e:"⛓️",n:"Наручники",d:"Выбранный игрок пропускает свой следующий ход."},
+  saw:{e:"🪚",n:"Пила",d:"Следующий выстрел наносит 2 урона (если патрон боевой)."},
+  med:{e:"💊",n:"Таблетки",d:"50% — +2 жизни, 50% — −1 жизнь. Может убить!"},
+  inv:{e:"🔄",n:"Инвертор",d:"Меняет текущий патрон на противоположный."},
+  phone:{e:"📱",n:"Телефон",d:"Тайно показывает последний патрон, если их больше двух. В хардкоре при двух и менее сгорает впустую."},
+  adr:{e:"💉",n:"Адреналин",d:"Украдите предмет у соперника и сразу примените его. Адреналин красть нельзя."}
+};
+const ORDER = Object.keys(ITEMS);
+
+/* ───────── связь ───────── */
+function devInit() { const q = new URLSearchParams(location.search), n = q.get("dev");
+  return n ? "dev:" + (q.get("devid") || "1") + ":" + n : ""; }
+const INIT = (tg && tg.initData) || devInit();
+async function api(path, body) {
+  try {
+    const r = await fetch("/api/" + path, {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(Object.assign({initData: INIT}, body || {}))});
+    return await r.json();
+  } catch (e) { return {error:"net", msg:"Нет связи с сервером"}; }
+}
+let S = null, room = null, ver = -1, lastEv = null, token = 0, busy = false;
+let selTarget = null, aimedIndex = null, modalKind = null, itemInspectOnOwnTurn = false, recvAt = 0, lastKey = "";
+let eventPlayback = Promise.resolve();
+let pendingEventBatches = 0, deferredLog = null;
+
+/* ───────── звук и эффекты ───────── */
+let AC = null, muted = localStorage.getItem("bk_mute") === "1";
+let musicOn = localStorage.getItem("bk_music") === "1";
+let playSpeed = localStorage.getItem("bk_speed") || "slow";
+let cinemaMode = localStorage.getItem("bk_cinema") || "full";
+let smoothMotion = localStorage.getItem("bk_motion") !== "0";
+const BOT_PACES = {slow:7.5, normal:4.8, fast:2.8};
+function applyVisualSettings() {
+  document.body.dataset.cinema = cinemaMode;
+  document.body.classList.toggle("motion-off", !smoothMotion);
+}
+applyVisualSettings();
+let sfxVolume = Math.max(0.2, Math.min(1, Number(localStorage.getItem("bk_sfx_volume") || 0.7)));
+let ambientNodes = [], ambientGain = null;
+function ctx() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (AC && AC.state === "suspended") AC.resume(); return AC; }
+function noise(dur, fq, vol, type) { const c = ctx(); if (!c || muted) return;
+  const n = Math.floor(c.sampleRate * dur), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+  const s = c.createBufferSource(); s.buffer = b; const f = c.createBiquadFilter(); f.type = type || "lowpass";
+  f.frequency.value = fq; const g = c.createGain(); g.gain.value = vol * sfxVolume; s.connect(f); f.connect(g); g.connect(c.destination); s.start(); }
+function tone(fq, dur, vol, type, to) { const c = ctx(); if (!c || muted) return;
+  const o = c.createOscillator(), g = c.createGain(); o.type = type || "sine"; o.frequency.value = fq;
+  if (to) o.frequency.exponentialRampToValueAtTime(to, c.currentTime + dur);
+  g.gain.setValueAtTime(vol * sfxVolume, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+  o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur); }
+const SND = {
+  boom() { noise(0.72, 520, 1.05); tone(82, 0.52, 0.85, "sine", 25); setTimeout(() => noise(0.16, 900, 0.22), 65); },
+  sawboom() { noise(.92, 720, 1.28, "lowpass"); tone(68, .72, 1.0, "sine", 19); tone(165, .2, .42, "sawtooth", 48); setTimeout(() => noise(.28, 1250, .34), 55); setTimeout(() => tone(48, .34, .32, "sine", 25), 90); },
+  click() { noise(0.055, 3400, 0.48, "highpass"); tone(1250, 0.035, 0.16, "square", 700); },
+  cock() { noise(0.045, 2700, 0.42, "highpass"); setTimeout(() => { noise(0.07, 1500, 0.36, "highpass"); tone(420, 0.055, 0.12, "triangle", 260); }, 135); },
+  toll() { tone(118, 1.35, 0.32, "triangle", 68); setTimeout(() => tone(78, 0.8, 0.18, "sine", 42), 180); },
+  load() { [0,1,2,3].forEach(i => setTimeout(() => { noise(0.045, 1800 + i * 280, 0.38, "highpass"); tone(260 + i*45, .06, .11, "square", 180+i*25); }, i * 105)); },
+  tick() { noise(0.028, 3000, 0.22, "highpass"); },
+  glass() { tone(1450,.22,.22,"sine",980); setTimeout(()=>tone(1900,.18,.14,"sine",1300),90); },
+  beer() { tone(420,.12,.22,"triangle",250); noise(.12,850,.2,"lowpass"); },
+  cig() { noise(.16,1100,.22,"lowpass"); tone(620,.2,.13,"sine",390); },
+  cuffs() { noise(.09,2600,.38,"highpass"); setTimeout(()=>noise(.07,1900,.3,"highpass"),100); },
+  saw() { noise(.22,1900,.32,"bandpass"); tone(180,.18,.2,"sawtooth",90); },
+  med() { tone(520,.13,.2,"sine",760); setTimeout(()=>tone(760,.2,.18,"sine",1040),130); },
+  inv() { tone(330,.22,.2,"triangle",880); setTimeout(()=>tone(880,.2,.16,"triangle",440),110); },
+  phone() { tone(880,.09,.17,"sine"); setTimeout(()=>tone(1175,.13,.17,"sine"),130); },
+  adr() { noise(.08,2400,.25,"highpass"); tone(300,.18,.2,"sawtooth",620); },
+  steal() { tone(660,.12,.2,"triangle",330); setTimeout(()=>noise(.08,2100,.25,"highpass"),100); },
+  win() { [523,659,784].forEach((f,i)=>setTimeout(()=>tone(f,.42,.18,"sine",f*1.02),i*130)); }
+};
+const snd = k => { try { SND[k](); } catch (e) {} };
+function setMusic(on) {
+  musicOn = !!on; localStorage.setItem("bk_music", musicOn ? "1" : "0");
+  const c = ctx();
+  if (!musicOn || !c) {
+    ambientNodes.forEach(n => { try { n.stop(); } catch(e) {} }); ambientNodes = []; ambientGain = null; return;
+  }
+  if (ambientNodes.length) return;
+  ambientGain = c.createGain(); ambientGain.gain.value = 0.018;
+  const filter = c.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 180;
+  ambientGain.connect(filter); filter.connect(c.destination);
+  [55, 82.4, 110].forEach((hz, i) => { const o = c.createOscillator(); const g = c.createGain();
+    o.type = i === 1 ? "triangle" : "sine"; o.frequency.value = hz; g.gain.value = i === 0 ? 0.5 : 0.18;
+    o.connect(g); g.connect(ambientGain); o.start(); ambientNodes.push(o); });
+}
+const haptic = s => { try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(s); } catch (e) {} };
+function fx(html, ms, cls) { const d = document.createElement("div"); d.className = "fxb " + (cls || ""); d.innerHTML = html;
+  $("#fx").appendChild(d); setTimeout(() => d.remove(), ms); return d; }
+function flash(heavy = false) { const f = $("#flash"); f.classList.toggle("heavy", heavy); f.classList.remove("on"); void f.offsetWidth; f.classList.add("on"); }
+function shake(heavy = false) { if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return; const a = $("#app"); a.classList.toggle("heavy", heavy); a.classList.add("shake"); setTimeout(() => a.classList.remove("shake", "heavy"), heavy ? 700 : 520); }
+function floatAt(el, txt) { if (!el) return; const r = el.getBoundingClientRect(), d = document.createElement("div");
+  d.className = "flt"; d.textContent = txt; d.style.left = (r.left + r.width / 2 - 20) + "px"; d.style.top = (r.top + 10) + "px";
+  $("#fx").appendChild(d); setTimeout(() => d.remove(), 1000); }
+let toastT = null;
+function toast(t) { const e = $("#toast"); e.textContent = t; e.style.display = "block"; clearTimeout(toastT);
+  toastT = setTimeout(() => e.style.display = "none", 2600); }
+const nm = i => (S && S.players[i]) ? esc(S.players[i].name) : "?";
+
+function itemBurst(e, stolen) {
+  const k = e.item, it = ITEMS[k]; if (!it) return;
+  const d = document.createElement("div"); d.className = "item-burst " + k;
+  const labels = {glass:"ТАЙНАЯ ИНФОРМАЦИЯ",beer:"ПАТРОН ИЗВЛЕЧЁН",cig:"ВОССТАНОВЛЕНИЕ",cuffs:"ЦЕЛЬ СКОВАНА",saw:"СТВОЛ УСИЛЕН",med:"ЭФФЕКТ ПРЕПАРАТА",inv:"ПАТРОН ИЗМЕНЁН",phone:"СИГНАЛ ПОЛУЧЕН",adr:"АДРЕНАЛИН"};
+  d.innerHTML = `<span class="ib-icon">${it.e}</span><span class="ib-name">${stolen ? "КРАЖА · " : "ПРИМЕНЕНИЕ · "}${esc(it.n)}</span><span class="ib-note">${labels[k] || "ДЕЙСТВИЕ ВЫПОЛНЕНО"}</span>`;
+  document.body.appendChild(d); setTimeout(()=>{d.classList.add("out");setTimeout(()=>d.remove(),240)},720);
+  const target = Number.isInteger(e.to) ? document.querySelector(`.seat[data-i="${e.to}"]`) : null;
+  if (target) { target.classList.remove("item-targeted"); void target.offsetWidth; target.classList.add("item-targeted"); setTimeout(()=>target.classList.remove("item-targeted"),800); }
+  const own = Number.isInteger(e.by) ? document.querySelector(`.seat[data-i="${e.by}"]`) : null;
+  if (own && own !== target) { own.classList.remove("item-targeted"); void own.offsetWidth; own.classList.add("item-targeted"); setTimeout(()=>own.classList.remove("item-targeted"),800); }
+}
+function directorToast(message, duration = 2100) {
+  const old = document.querySelector(".director-callout"); if (old) old.remove();
+  const el = document.createElement("div"); el.className = "director-callout"; el.textContent = message;
+  document.body.appendChild(el); setTimeout(() => el.remove(), duration);
+}
+function clearAimFx() {
+  document.querySelectorAll(".gun.aiming").forEach(g => {
+    g.classList.remove("aiming"); g.style.removeProperty("--aim-angle");
+  });
+  document.querySelectorAll(".seat.aimed").forEach(card => card.classList.remove("aimed"));
+  document.querySelectorAll(".seat .target-sight").forEach(marker => marker.remove());
+  aimedIndex = null;
+}
+function aimAtPlayer(index, persistent = false) {
+  // Дробовик не поворачивается: выбранная цель обозначается прицельной меткой.
+  const gun = document.querySelector(".gun");
+  const card = document.querySelector(`.seat[data-i="${index}"]`);
+  if (!gun || !card) return clearAimFx;
+  if (aimedIndex !== index) {
+    clearAimFx();
+    card.classList.add("aimed");
+    aimedIndex = index;
+  }
+  // Единая мушка показывается и при выборе цели игроком, и во время выстрела бота.
+  if (!card.querySelector(".target-sight")) {
+    const sight = document.createElement("span");
+    sight.className = "target-sight";
+    sight.setAttribute("aria-hidden", "true");
+    sight.innerHTML = "<i></i>";
+    card.appendChild(sight);
+  }
+  if (persistent) return () => {};
+  const failsafe = setTimeout(clearAimFx, 5200);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true; clearTimeout(failsafe); clearAimFx();
+  };
+}
+async function stealFx(e) {
+  const victim = document.querySelector(`.seat[data-i="${e.victim}"]`);
+  const thief = document.querySelector(`.seat[data-i="${e.by}"]`);
+  if (!victim || !thief) return;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  victim.classList.add("steal-victim");
+  const stamp = document.createElement("span"); stamp.className = "steal-stamp";
+  stamp.textContent = e.victim === S.me ? "УКРАДЕНО" : "КРАЖА"; victim.appendChild(stamp);
+  const it = ITEMS[e.item];
+  const from = victim.getBoundingClientRect(), to = thief.getBoundingClientRect();
+  const flight = document.createElement("div"); flight.className = "steal-flight"; flight.textContent = it ? it.e : "?";
+  flight.style.left = `${from.left + from.width/2 - 24}px`; flight.style.top = `${from.top + from.height/2 - 24}px`;
+  document.body.appendChild(flight);
+  directorToast(e.victim === S.me ? "У ВАС УКРАЛИ ПРЕДМЕТ" : e.by === S.me ? "ВЫ ПОЛУЧАЕТЕ УКРАДЕННЫЙ ПРЕДМЕТ" : `${nm(e.by)} крадёт предмет у ${nm(e.victim)}`, 2600);
+  snd("steal");
+  if (reduced) {
+    flight.style.left = `${to.left + to.width/2 - 24}px`; flight.style.top = `${to.top + to.height/2 - 24}px`;
+    await sleep(30);
+  } else {
+    await sleep(520);
+    thief.classList.add("steal-thief");
+    flight.style.left = `${to.left + to.width/2 - 24}px`; flight.style.top = `${to.top + to.height/2 - 24}px`;
+    flight.style.transform = "scale(.72) rotate(12deg)";
+    await sleep(1220);
+    await sleep(720);
+  }
+  flight.remove(); stamp.remove();
+  victim.classList.remove("steal-victim"); thief.classList.remove("steal-thief");
+}
+async function reloadFx(e) {
+  const gun = document.querySelector(".gun");
+  const stage = document.querySelector(".gun-weapon");
+  if (!gun || !stage) return;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // В Hardcore показываем только общее число и нейтральные гильзы: тип и порядок не раскрываем.
+  const hidden = !!(S && S.hardcore);
+  const total = Math.max(1, Math.min(8, hidden ? ((Number(S.live0)||0) + (Number(S.blank0)||0)) : ((Number(e.live)||0) + (Number(e.blank)||0))));
+  document.body.classList.add("reloading");
+  if (!reduced) {
+    // Снаряды живут на уровне body, поэтому очередной сетевой render не оборвёт анимацию.
+    const box = stage.getBoundingClientRect();
+    const targetX = box.left + box.width * .385;
+    const targetY = box.top + box.height * .43;
+    const jobs = [];
+    for (let i = 0; i < total; i++) {
+      const shell = document.createElement("span");
+      const isBlank = !hidden && i >= (Number(e.live)||0);
+      shell.className = "reload-shell" + (hidden ? " neutral" : isBlank ? " blank" : "");
+      shell.setAttribute("aria-hidden", "true");
+      const startX = box.left + box.width * (.66 + (i % 4) * .055);
+      const startY = box.top + box.height * (.78 + Math.floor(i / 4) * .08);
+      shell.style.position = "fixed";
+      shell.style.left = `${startX}px`; shell.style.top = `${startY}px`;
+      document.body.appendChild(shell);
+      const delay = i * 210;
+      const anim = shell.animate([
+        {left:`${startX}px`,top:`${startY}px`,opacity:0,transform:"translateY(12px) rotate(90deg) scale(.72)"},
+        {left:`${startX}px`,top:`${startY}px`,opacity:1,offset:.18,transform:"translateY(0) rotate(55deg) scale(1)"},
+        {left:`${targetX}px`,top:`${targetY}px`,opacity:1,offset:.78,transform:"translateY(0) rotate(8deg) scale(.92)"},
+        {left:`${targetX-4}px`,top:`${targetY+2}px`,opacity:0,transform:"translateY(-2px) rotate(0) scale(.55)"}
+      ], {duration:850,delay,easing:"cubic-bezier(.2,.72,.22,1)",fill:"forwards"});
+      jobs.push(anim.finished.catch(()=>{}).then(()=>shell.remove()));
+    }
+    await sleep(220);
+    snd("load");
+    await Promise.all(jobs);
+    await sleep(300);
+  } else {
+    snd("load"); await sleep(260);
+  }
+  document.body.classList.remove("reloading");
+}
+async function playEvents(evs) {
+  for (const e of evs) {
+    if (e.k === "shot") await shotFx(e);
+    else if (e.k === "item") {
+      const wait = playSpeed === "slow" ? 1800 : playSpeed === "normal" ? 1450 : 1100;
+      itemBurst(e, false); fx(`<span class="em">${ITEMS[e.item].e}</span>${nm(e.by)}: ${ITEMS[e.item].n}`, wait);
+      snd(e.item in SND ? e.item : "tick");
+      if (e.item === "saw") { const g=$(".gun"); if(g){g.classList.add("sawing");await sleep(playSpeed === "slow" ? 1250 : 950);g.classList.remove("sawing");g.classList.add("weapon-settle");setTimeout(()=>g.classList.remove("weapon-settle"),650);} }
+      await sleep(wait);
+    }
+    else if (e.k === "steal") {
+      itemBurst(e, true);
+      fx(`<span class="em">💉</span>${nm(e.by)} крадёт ${ITEMS[e.item].e} у ${nm(e.victim)}`, playSpeed === "slow" ? 2600 : 2200);
+      await stealFx(e);
+    }
+    else if (e.k === "reload") {
+      // Без текстового callout: остаются только звук и сама анимация зарядки.
+      await reloadFx(e);
+    }
+    else if (e.k === "die") {
+      const wait = playSpeed === "slow" ? 2100 : playSpeed === "normal" ? 1600 : 1200;
+      fx(`<span class="em">⚰️</span>${nm(e.who)} больше не встанет`, wait); snd("toll"); haptic("heavy"); await sleep(wait);
+    }
+  }
+}
+function ejectCasing(gun, sawed = false) {
+  if (!gun || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const casing = document.createElement("span"); casing.className = "shell-casing";
+  if (sawed) casing.style.right = "48%";
+  gun.appendChild(casing); setTimeout(() => casing.remove(), 760);
+}
+function muzzleBurst(gun, sawed = false) {
+  if (!gun || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const flashEl = document.createElement("span"); flashEl.className = "muzzle-flash";
+  const smoke = document.createElement("span"); smoke.className = "muzzle-smoke";
+  if (sawed) { flashEl.style.right = "34%"; smoke.style.right = "35%"; }
+  gun.append(flashEl, smoke);
+  setTimeout(() => { flashEl.remove(); smoke.remove(); }, 950);
+}
+async function shotFx(e) {
+  // Всегда очищаем остатки прошлой подсветки до начала нового выстрела.
+  clearAimFx();
+  const card = document.querySelector(`.seat[data-i="${e.to}"]`);
+  const gun = document.querySelector(".gun");
+  const releaseAim = aimAtPlayer(e.to);
+  const incoming = e.to === S.me && e.by !== S.me;
+  let pov = null;
+  try {
+    directorToast(incoming ? `${nm(e.by)} НАПРАВИЛ ДРОБОВИК НА ВАС` : e.to === e.by ? `${nm(e.by)} НАПРАВИЛ ОРУЖИЕ НА СЕБЯ` : `${nm(e.by)} НАПРАВИЛ ОРУЖИЕ НА ${nm(e.to)}`);
+    fx(e.to === e.by ? `${nm(e.by)} целится <b>в себя</b>…` : `${nm(e.by)} <b>→</b> ${nm(e.to)}`, 1500);
+    if (incoming && cinemaMode === "full" && smoothMotion && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      pov = document.createElement("div"); pov.className = "pov-threat";
+      pov.innerHTML = '<div class="pov-vignette"></div><div class="pov-muzzle"><i></i><b></b></div><div class="pov-label">СТВОЛ НАПРАВЛЕН НА ВАС</div>';
+      document.body.appendChild(pov);
+    }
+    await sleep(playSpeed === "slow" ? 1450 : playSpeed === "normal" ? 1050 : 750);
+    if (e.live) {
+      const sawedBlast = !!e.sawed || Number(e.dmg) > 1;
+      if (gun) { gun.classList.remove("fire-blank"); gun.classList.add("fire-live", "muzzle-on"); if (sawedBlast) gun.classList.add("sawed-blast"); }
+      muzzleBurst(gun, sawedBlast); ejectCasing(gun, sawedBlast); flash(sawedBlast); shake(sawedBlast); snd(sawedBlast ? "sawboom" : "boom"); haptic("heavy");
+      if (pov) { pov.classList.add("pov-blast"); setTimeout(() => { if (pov && pov.isConnected) pov.remove(); }, 720); }
+      if (card) { card.classList.remove("impact", "near-miss"); void card.offsetWidth; card.classList.add("impact"); floatAt(card, "−" + e.dmg); }
+      fx(sawedBlast ? "БАХ-БАХ!" : "БАХ!", sawedBlast ? 1450 : 1200, sawedBlast ? "saw-boom" : "boom"); await sleep(playSpeed === "slow" ? (sawedBlast ? 1550 : 1250) : playSpeed === "normal" ? (sawedBlast ? 1200 : 950) : (sawedBlast ? 850 : 650));
+    } else {
+      if (gun) { gun.classList.remove("fire-live", "muzzle-on"); gun.classList.add("fire-blank"); }
+      if (card) { card.classList.remove("near-miss", "impact"); void card.offsetWidth; card.classList.add("near-miss"); }
+      snd("click"); haptic("light"); fx("ЩЁЛК!", 1000, "click"); await sleep(playSpeed === "slow" ? 1050 : playSpeed === "normal" ? 800 : 600);
+    }
+  } finally {
+    if (pov && pov.isConnected) pov.remove();
+    if (releaseAim) releaseAim(); else clearAimFx();
+    if (gun) gun.classList.remove("fire-live", "fire-blank", "muzzle-on", "sawed-blast");
+  }
+}
+
+/* ───────── окна ───────── */
+function openModal(html, kind) { modalKind = kind || null; if (kind !== "item") itemInspectOnOwnTurn = false; const m = $("#modal");
+  m.classList.toggle("item-inspect", kind === "item"); m.innerHTML = `<div class="back" data-a="close"></div>${html}`; m.classList.add("on"); }
+function closeModal() { modalKind = null; itemInspectOnOwnTurn = false; const m = $("#modal"); m.classList.remove("on","item-inspect"); m.innerHTML = ""; }
+function sheet(inner) { return `<div class="sheet">${inner}</div>`; }
+function reveal(text) {
+  const i = text.indexOf(":"); const head = i > 0 ? text.slice(0, i) : "", val = i > 0 ? text.slice(i + 1).trim() : text;
+  const em = [...text][0];
+  openModal(`<div class="reveal"><div style="font-size:42px">${em}</div><div class="h">${esc(head.replace(em, "").trim())}</div>
+    <div class="v">${esc(val.replace(em, "").trim())}</div><button class="btn ghost" data-a="close">Понял</button></div>`, "reveal");
+}
+const RULES_HTML = `<div class="rules"><div class="c big" style="font-size:34px">☠️</div><h3 class="ttl c">Правила</h3>
+<h4>Цель</h4><p>Остаться последним в живых. Матч идёт до <b>2 побед</b> в раундах.</p>
+<h4>Дробовик</h4><p>Заряжен случайным набором 🔴 боевых и ⚪ холостых патронов. При зарядке объявляют, сколько каких. В Хардкоре порядок и остаток скрыты; в Облегчённом выстрелившие патроны отмечаются на ленте над стволом.</p>
+<h4>Ваш ход</h4><p>Выстрелите в соперника — ход переходит дальше (даже если патрон холостой).<br>Выстрелите в себя: <b>холостой</b> — ходите ещё раз, <b>боевой</b> — теряете жизнь и ход переходит. Боевой = −1 🩸 (с пилой −2). Нет жизней — вы выбыли.</p>
+<h4>Предметы</h4><p>Раунд I — без предметов, II — по 2, дальше по 3 при каждой перезарядке (максимум 8). Нажмите на карточку — увидите описание. Предметы соперников видны всем: нажмите на его карточку.</p>
+${ORDER.map(k => `<div class="it"><span class="e">${ITEMS[k].e}</span><div><b>${ITEMS[k].n}</b>${ITEMS[k].d}</div></div>`).join("")}
+<h4>Режимы</h4><p><b>Хардкор 💀 (основной режим, включён по умолчанию)</b> — при каждой зарядке всем объявляют начальное количество боевых и холостых. Затем остаток и типы патронов скрыты: считайте самостоятельно. Телефон при 2 патронах и меньше сгорает впустую.<br><b>Облегчённый</b> — оставшиеся патроны и их типы видны на ленте над стволом.</p>
+<h4>Если игрок молчит</h4><p>Через 90 секунд остальные могут выгнать его из раунда кнопкой «⏰».</p>
+<button class="btn primary" data-a="close">Закрыть</button></div>`;
+
+/* ───────── экраны ───────── */
+function gunSvg(sawed, stockAvatar = "") {
+  const barrelEnd = sawed ? 320 : 397;
+  const foreEnd = sawed ? 300 : 344;
+  return `<svg viewBox="0 0 430 116" class="shotgun" role="img" aria-label="Двуствольный дробовик на игровом столе">
+  <defs>
+    <linearGradient id="gunSteel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#aaa29a"/><stop offset=".13" stop-color="#55504d"/><stop offset=".48" stop-color="#211d1c"/><stop offset=".78" stop-color="#090909"/><stop offset="1" stop-color="#39312d"/></linearGradient>
+    <linearGradient id="gunWood" x1="0" y1="0" x2=".12" y2="1"><stop offset="0" stop-color="#98623a"/><stop offset=".28" stop-color="#63391f"/><stop offset=".72" stop-color="#321b11"/><stop offset="1" stop-color="#160d09"/></linearGradient>
+    <linearGradient id="gunHighlight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1d4a0" stop-opacity=".6"/><stop offset="1" stop-color="#f1d4a0" stop-opacity="0"/></linearGradient>
+    <filter id="gunShadow" x="-20%" y="-60%" width="140%" height="240%"><feGaussianBlur stdDeviation="4"/></filter>
+  </defs>
+  <ellipse cx="213" cy="91" rx="190" ry="11" fill="#000" opacity=".72" filter="url(#gunShadow)"/>
+  <!-- деревянный приклад -->
+  <path d="M12 43 Q7 39 12 31 L28 25 L108 31 L133 39 L133 68 L108 76 L37 88 Q19 88 15 74Z" fill="url(#gunWood)" stroke="#160b07" stroke-width="3"/>
+  <path d="M21 42 Q54 35 104 42 M24 56 Q68 48 120 54 M30 70 Q68 62 111 64" fill="none" stroke="#c18a54" stroke-opacity=".22" stroke-width="2"/>
+  <path d="M20 36 Q60 29 112 38" fill="none" stroke="url(#gunHighlight)" stroke-width="3"/>
+  ${stockAvatar ? `<g class="stock-avatar-ring" aria-label="Ход игрока: ${esc(stockAvatar)}"><circle cx="69" cy="56" r="17"/><circle cx="69" cy="56" r="13.5"/><text class="stock-avatar-text" x="69" y="56">${esc(stockAvatar)}</text></g>` : ""}
+  <path d="M27 48 L34 79" stroke="#1a0e09" stroke-width="4" opacity=".65"/>
+  <!-- ствольная коробка -->
+  <path d="M112 30 Q120 24 137 27 L174 31 L181 67 L151 77 L119 68 L108 55Z" fill="url(#gunSteel)" stroke="#080808" stroke-width="3"/>
+  <path d="M121 32 L163 35 L168 42 L119 40Z" fill="#c7bdb0" opacity=".2"/>
+  <path d="M145 70 Q154 91 179 74" fill="none" stroke="#171312" stroke-width="7"/>
+  <path d="M150 69 Q157 84 172 73" fill="none" stroke="#8d8177" stroke-width="2"/>
+  <path d="M128 75 L126 84 L146 84 L151 74" fill="url(#gunWood)" stroke="#160b07" stroke-width="2"/>
+  <circle cx="132" cy="47" r="3.2" fill="#b6a99b" stroke="#171312" stroke-width="1.5"/>
+  <circle cx="158" cy="55" r="2.6" fill="#b6a99b" stroke="#171312" stroke-width="1.2"/>
+  <!-- два ствола -->
+  <path d="M165 31 L${barrelEnd} 31 L${barrelEnd} 44 L168 44Z" fill="url(#gunSteel)" stroke="#080808" stroke-width="2"/>
+  <path d="M165 49 L${barrelEnd} 49 L${barrelEnd} 62 L168 62Z" fill="url(#gunSteel)" stroke="#080808" stroke-width="2"/>
+  <path d="M174 34 L${barrelEnd-8} 34 M174 52 L${barrelEnd-8} 52" stroke="#d8d0c7" stroke-opacity=".32" stroke-width="2"/>
+  <path d="M170 44 L${barrelEnd} 44 M170 62 L${barrelEnd} 62" stroke="#050505" stroke-width="2"/>
+  <!-- цевьё и крепления -->
+  <path d="M190 43 L${foreEnd} 43 L${foreEnd} 72 Q${foreEnd-3} 79 ${foreEnd-12} 77 L190 66Z" fill="url(#gunWood)" stroke="#160b07" stroke-width="2.5"/>
+  <path d="M198 48 L${foreEnd-8} 48" stroke="#d39b60" stroke-opacity=".42" stroke-width="2"/>
+  <path d="M208 42 L208 68 M${foreEnd-18} 42 L${foreEnd-18} 70" stroke="#171211" stroke-width="3"/>
+  <path d="M170 25 L184 25 L190 31 L170 31Z" fill="#aaa29a" stroke="#171211" stroke-width="1.5"/>
+  ${sawed
+    ? `<path d="M${barrelEnd-7} 26 L${barrelEnd+2} 31 L${barrelEnd-7} 37 M${barrelEnd-7} 44 L${barrelEnd+2} 49 L${barrelEnd-7} 55 M${barrelEnd-7} 62 L${barrelEnd+2} 67" fill="none" stroke="#d6c8b8" stroke-width="2.4"/><path d="M${barrelEnd+3} 28 L${barrelEnd+3} 70" stroke="#a51b20" stroke-width="2"/>`
+    : `<path d="M${barrelEnd-2} 26 L${barrelEnd+5} 26 L${barrelEnd+5} 67 L${barrelEnd-2} 67Z" fill="#171514" stroke="#77706a" stroke-width="1.5"/><ellipse cx="${barrelEnd+1}" cy="37.5" rx="3.2" ry="4.2" fill="#050505" stroke="#aaa29a"/><ellipse cx="${barrelEnd+1}" cy="55.5" rx="3.2" ry="4.2" fill="#050505" stroke="#aaa29a"/>`}
+  <path d="M16 89 Q120 101 240 89" fill="none" stroke="#d1a06d" stroke-opacity=".18" stroke-width="2"/>
+  </svg>`;
+}
+function renderNoAuth() {
+  $("#app").innerHTML = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Только через Telegram</h1>
+  <p class="tag">Откройте бота и нажмите кнопку «☠️ Играть» слева от поля ввода.</p></div>`;
+}
+function renderHome() {
+  S = null; room = null; token++; localStorage.removeItem("bk_room");
+  $("#app").innerHTML = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
+  <p class="tag">Сырой подвал. Тусклая лампа.<br>Один дробовик на всех.</p>${gunSvg(false)}
+  <div class="col"><button class="btn primary" data-a="create">☠ Накрыть стол</button>
+  <button class="btn" data-a="vsbot">🎭 Сыграть против бота</button>
+  <div class="join"><input id="code" maxlength="4" placeholder="КОД" autocomplete="off"><button class="btn" data-a="join">Войти</button></div>
+  <div class="profile-grid"><button class="btn" data-a="profile">👤 Профиль</button><button class="btn" data-a="leaderboard">🏆 Рейтинг</button></div>
+  <div class="profile-grid"><button class="btn" data-a="matches">📜 Матчи</button><button class="btn" data-a="settings">⚙️ Звук</button></div>
+  <button class="link" data-a="rules">📖 Правила</button></div></div>`;
+}
+function renderLobby() {
+  const host = S.host, imHost = S.players.some(p => p.id === host && S.players.indexOf(p) === S.me);
+  const mine = S.me >= 0 ? S.players[S.me] : null;
+  if (!mine) {
+    $("#app").innerHTML = `<div class="lobby"><div class="hd"><div class="t ttl">Стол ${esc(S.code)}</div><div class="spectator-tag">👁 РЕЖИМ НАБЛЮДЕНИЯ</div></div><p class="c dim">Вы наблюдаете за подготовкой игроков. Когда начнётся матч, вы сможете следить за ходом игры.</p><div class="srow">Участников: ${S.players.length} · Зрителей: ${S.spectators || 0}</div><button class="btn ghost" data-a="leavewatch">Покинуть наблюдение</button></div>`;
+    return;
+  }
+  const allReady = S.players.every(p => p.bot || p.ready);
+  let rows = "";
+  for (let i = 0; i < S.maxPlayers; i++) {
+    const p = S.players[i];
+    if (!p) { rows += `<div class="srow empty"><div class="av">·</div><div class="nm dim">пустой стул</div></div>`; continue; }
+    const tools = (imHost && i !== S.me) ? `${p.bot ? "" : `<button class="mini" data-a="host" data-i="${i}" title="Сделать хозяином">👑</button>`}<button class="mini" data-a="kick" data-i="${i}" title="Убрать">✕</button>` : "";
+    rows += `<div class="srow"><div class="av">${p.bot ? "🎭" : esc([...p.name][0] || "?").toUpperCase()}</div>
+      <div class="nm">${esc(p.name)}${i === S.me ? ' <small class="dim">(вы)</small>' : ""}</div>${p.id === host ? "<span>👑</span>" : ""}<span class="${p.bot || p.ready ? "ready" : "notready"}">${p.bot ? "БОТ · ГОТОВ" : p.ready ? "ГОТОВ" : "НЕ ГОТОВ"}</span>${tools}</div>`;
+  }
+  const hc = S.hardcore;
+  $("#app").innerHTML = `<div class="lobby"><div class="hd"><div class="t ttl">Стол</div><div class="code" data-a="copy">${esc(S.code)}</div></div>
+  <button class="btn primary" data-a="invite">📨 Пригласить друзей</button>
+  ${rows}
+  <div class="seg"><button class="${hc ? "on" : ""}" data-a="mode" data-on="1">Хардкор 💀</button><button class="${hc ? "" : "on"}" data-a="mode" data-on="0">Облегчённый</button></div>
+  <div class="modeinfo">${hc ? "Основной режим: объявляется начальный состав, затем остаток и типы патронов скрыты." : "Облегчённый режим: на ленте видны оставшиеся патроны и их типы."}${imHost ? "" : " <i>(режим выбирает хозяин)</i>"}</div>
+  ${mine ? `<button class="btn ${mine.ready ? "ghost" : "primary"}" data-a="ready">${mine.ready ? "✓ Вы готовы · отменить готовность" : "🙋 Я готов"}</button>` : ""}
+  <div class="modeinfo">${allReady ? "Все участники готовы. Можно начинать." : "Ожидаем готовности всех игроков."}</div>
+  <button class="btn" data-a="addbot" ${S.players.length >= S.maxPlayers ? "disabled" : ""}>🎭 Добавить бота</button>
+  <button class="btn primary" data-a="begin" ${imHost && allReady ? "" : "disabled"}>${imHost ? (allReady ? "🔫 Начать игру" : "⏳ Ожидаем готовности") : "Ждём хозяина стола…"}</button>
+  <button class="btn ghost" data-a="leave">🚪 Покинуть стол</button><div style="text-align:center;margin-top:10px"><button class="link" data-a="rules">📖 Правила</button></div></div>`;
+}
+function seatHtml(p, i) {
+  const c = ["seat"]; if (S.turn === i) c.push("cur"); if (!p.alive) c.push("dead"); if (selTarget === i) c.push("sel");
+  let pips = ""; for (let k = 0; k < p.max; k++) pips += `<i class="pip${k < p.hp ? "" : " off"}"></i>`;
+  const its = p.items.map(k => `<span title="${esc(ITEMS[k].n)}">${ITEMS[k].e}</span>`).join("");
+  const bd = (p.cuffed ? '<span class="bd" title="Скован">⛓️</span>' : "") + (S.host === p.id ? '<span class="bd" title="Хозяин стола">👑</span>' : "") + (p.wins ? `<span class="bd" title="Победы">${"🗡".repeat(p.wins)}</span>` : "");
+  const avatar = p.bot ? "♟" : esc([...p.name][0] || "?").toUpperCase();
+  const canPick = S.state === "play" && S.me >= 0 && S.turn === S.me && p.alive;
+  const avatarHtml = `<button type="button" class="seatav pickable" data-a="seat" data-i="${i}" aria-label="Открыть карточку игрока: ${esc(p.name)}" title="Информация об игроке">${avatar}</button>`;
+  const status = !p.alive ? "ВЫБЫЛ" : S.turn === i ? "ХОДИТ СЕЙЧАС" : (p.bot ? "БОТ" : "ЗА СТОЛОМ");
+  return `<div class="${c.join(" ")}" data-a="seat" data-i="${i}"><div class="seathead">${avatarHtml}<div class="nm">${esc(p.name)}${i === S.me ? ' <small>ВАШ ПЕРСОНАЖ</small>' : ""}</div><div class="bds">${bd}</div></div>
+  <div class="seat-meta"><span>${p.bot ? "Соперник · ИИ" : "Участник"}</span><span class="turn-label">${status}</span></div>
+  <div class="hp">${p.alive ? pips + `<span class="hp-count">${p.hp}/${p.max} HP</span>` : '<span class="rip">⚰️ игрок выбыл</span>'}</div><div class="its">${its || '<span class="dim">Предметов нет</span>'}</div>${selTarget === i ? '<span class="target-sight" aria-hidden="true"><i></i></span>' : ""}</div>`;
+}
+function shellsHtml() {
+  let h = "";
+  const known = {}; (S.known || []).forEach(k => known[k.pos] = k.live);
+  for (let i = 0; i < S.total; i++) {
+    let c = "shell", t = "?";
+    if (i < S.tape.length) c += " fired " + (S.tape[i] ? "live" : "blank");
+    else { if (i === S.tape.length) c += " now"; if (i in known) { c += " kn " + (known[i] ? "live" : "blank"); t = "👁"; } }
+    h += `<div class="${c}">${t}</div>`;
+  }
+  return h;
+}
+function dockHtml() {
+  if (S.state !== "play") return "";
+  const me = S.me, myTurn = me >= 0 && S.turn === me;
+  const mine = me >= 0 ? S.players[me] : null;
+  let itemsHtml = "";
+  let inventoryCount = 0;
+  if (mine && mine.alive) {
+    const cnt = {}; mine.items.forEach(k => { cnt[k] = (cnt[k] || 0) + 1; inventoryCount++; });
+    itemsHtml = ORDER.filter(k => cnt[k]).map(k => {
+      const unusable = myTurn && S.usable && S.usable[k] && !S.usable[k].ok;
+      const reason = unusable ? S.usable[k].why : "";
+      return `<button class="icard${unusable ? " off" : ""}" type="button" data-a="item" data-k="${k}" aria-label="${esc(ITEMS[k].n)}${cnt[k] > 1 ? ", количество " + cnt[k] : ""}${unusable ? ", сейчас недоступно" : ""}" title="${esc(reason || ITEMS[k].d)}">
+        <span class="item-glint"></span><span class="item-icon">${ITEMS[k].e}</span>
+        <span class="item-name">${ITEMS[k].n}</span>${cnt[k] > 1 ? `<span class="item-qty">×${cnt[k]}</span>` : ""}
+        <span class="item-state">${unusable ? "НЕДОСТУПНО" : "ОСМОТРЕТЬ"}</span></button>`;
+    }).join("");
+  }
+  const items = `<section class="inventory" aria-label="Инвентарь">
+    <div class="inventory-head"><span class="inventory-title">ИНВЕНТАРЬ · НАЖМИТЕ ДЛЯ ОСМОТРА</span><span class="inventory-total">${inventoryCount} предметов</span></div>
+    <div class="items" id="items">${itemsHtml || '<div class="none"><span>—</span> Карманы пусты</div>'}</div>
+  </section>`;
+  if (!mine) return `<div class="dock"><div class="wt">👁 Вы наблюдаете за игрой</div><button class="btn ghost small" data-a="leavewatch">Покинуть наблюдение</button></div>`;
+  if (!mine.alive) return pendingEventBatches ? "" : `<div class="dock"><div class="wt">⚰️ Вы выбыли. Наблюдайте за финалом.</div></div>`;
+  if (myTurn) {
+    let chips = `<button class="tgb${selTarget === me ? " on" : ""}" data-a="pick" data-i="${me}">🎯 В себя</button>`;
+    S.players.forEach((p, i) => { if (i !== me && p.alive) chips += `<button class="tgb${selTarget === i ? " on" : ""}" data-a="pick" data-i="${i}">🔫 ${esc(p.name)}</button>`; });
+    const lab = selTarget === null ? "Выберите цель" : selTarget === me ? "🔫 ВЫСТРЕЛИТЬ В СЕБЯ" : "🔫 ВЫСТРЕЛИТЬ В " + esc(S.players[selTarget].name.toUpperCase());
+    return `<div class="dock"><div class="yt">ТВОЙ ХОД</div>${items}<div class="tg">${chips}</div>
+      <button class="btn fire primary" data-a="fire" ${selTarget === null ? "disabled" : ""}>${lab}</button></div>`;
+  }
+  const cur = S.players[S.turn];
+  const afk = (!cur.bot) ? `<button class="btn ghost small" id="afkBtn" data-a="afk" style="margin:6px auto 0;display:block"></button>` : "";
+  return `<div class="dock"><div class="wt">${cur.bot ? "🎭" : "🕯"} Ходит <b>${esc(cur.name)}</b>${cur.bot ? " — молча взвешивает дробовик…" : ""}</div>${afk}${items}</div>`;
+}
+function renderGame() {
+  const visibleLog = deferredLog || S.log;
+  const logs = visibleLog.slice(-4).map(l => `<div class="ln">${l}</div>`).join("");
+  const wins = S.players.map(p => `<span class="chip">${esc(p.name)} ${p.wins ? "🗡".repeat(p.wins) : "0"}</span>`).join("");
+  let cnt = S.hardcore ? `Объявлено при зарядке: 🔴×${S.live0} · ⚪×${S.blank0}` : `Заряжено: 🔴×${S.live0} ⚪×${S.blank0}`;
+  const turnOwner = S.players[S.turn];
+  const stockAvatar = turnOwner ? (turnOwner.bot ? "♟" : [...(turnOwner.name || "?")].slice(0, 2).join("").toUpperCase()) : "";
+  if (S.bel) cnt += ` → осталось: 🔴×${S.bel[0]} ⚪×${S.bel[1]}`;
+  const keepI = $("#items"), sx = keepI ? keepI.scrollLeft : 0, mainEl = $(".main"), sy = mainEl ? mainEl.scrollTop : 0;
+  let veil = "";
+  const terminalDeferred = pendingEventBatches > 0 && (S.state === "between" || S.state === "over");
+  if (S.state === "between" && !terminalDeferred) {
+    const alive = S.players.filter(p => p.alive)[0];
+    const scoreRows = S.players.map(p => `<span class="result-score${p.alive ? " survivor" : ""}"><b>${esc(p.name)}</b><i>${p.wins || 0} / ${S.winsNeeded}</i></span>`).join("");
+    veil = `<div class="veil result-veil round-result" role="dialog" aria-modal="true" aria-label="Итоги раунда">
+      <div class="result-backlight"></div><div class="result-grain"></div>
+      <div class="result-col">
+        <div class="result-overline"><span></span> ПРОТОКОЛ ЗАВЕРШЁН <span></span></div>
+        <div class="result-emblem blood-emblem"><span>🩸</span></div>
+        <div class="result-kicker">РАУНД ${roman(S.round)}</div>
+        <h2 class="result-title ttl">Раунд окончен</h2>
+        <p class="result-sub">${alive ? "За столом остался" : "Последний выстрел прозвучал"}</p>
+        <div class="result-survivor">${alive ? `<span class="survivor-mark">♛</span><b>${esc(alive.name)}</b><small>ВЫЖИВШИЙ</small>` : `<b>Никто не выжил</b><small>РАУНД БЕЗ ПОБЕДИТЕЛЯ</small>`}</div>
+        <div class="result-divider"><span>СЧЁТ МАТЧА</span></div>
+        <div class="result-scoreboard">${scoreRows}</div>
+        <p class="result-footnote">Матч продолжается до ${S.winsNeeded} побед</p>
+        ${S.me >= 0 ? '<button class="btn primary result-action" data-a="next"><span>🔫</span> Следующий раунд <i>→</i></button>' : '<p class="result-wait">Зрительский режим · ждём следующий раунд</p>'}
+      </div></div>`;
+  } else if (S.state === "over" && !terminalDeferred) {
+    const w = S.players[S.winner];
+    const scoreRows = S.players.map(p => `<span class="result-score${w && p === w ? " champion" : ""}"><b>${esc(p.name)}</b><i>${p.wins || 0} ПОБЕД</i></span>`).join("");
+    veil = `<div class="veil result-veil final-result" role="dialog" aria-modal="true" aria-label="Итоги матча">
+      <div class="result-backlight"></div><div class="result-grain"></div>
+      <div class="result-col">
+        <div class="result-overline"><span></span> ПОСЛЕДНИЙ ВЫЖИВШИЙ <span></span></div>
+        <div class="result-emblem crown-emblem"><span>♛</span><i>✦</i></div>
+        <div class="result-kicker">МАТЧ ЗАВЕРШЁН</div>
+        <h2 class="result-title ttl">${w ? "Победитель" : "Игра окончена"}</h2>
+        <div class="champion-name">${w ? esc(w.name) : "Нет победителя"}</div>
+        <p class="result-sub">${w ? "Подвал признал нового хозяина." : "Никто не покинул подвал победителем."}</p>
+        <div class="result-divider"><span>ИТОГОВЫЙ СЧЁТ</span></div>
+        <div class="result-scoreboard">${scoreRows}</div>
+        <div class="result-stamp">THE HOUSE REMEMBERS</div>
+        ${S.me >= 0 ? '<button class="btn primary result-action" data-a="rematch"><span>🔁</span> Ещё одна ночь <i>→</i></button>' : '<button class="btn primary result-action" data-a="leavewatch">Покинуть наблюдение</button>'}
+        <button class="btn ghost result-secondary" data-a="matches">📜 История матчей</button>
+        <button class="btn ghost result-secondary" data-a="home">В главное меню</button>
+      </div></div>`;
+  }
+  $("#app").innerHTML = `<div class="top"><button class="ic" data-a="menu">☰</button>
+    <div class="rd ttl">Раунд ${roman(S.round)}${S.hardcore ? '<span class="hc">💀 хардкор</span>' : ""}${S.me < 0 ? ' <span class="spectator-tag">ЗРИТЕЛЬ</span>' : ""}${S.spectators ? ' <span class="spectator-tag">👁 ' + S.spectators + '</span>' : ""}</div>
+    <button class="ic" data-a="snd">${muted ? "🔇" : "🔊"}</button></div>
+  <div class="main"><div class="score">${wins}</div><div class="seats">${S.players.map(seatHtml).join("")}</div>
+  <section class="gun" aria-label="Игровой стол и дробовик"><div class="scene-kicker"><span></span> ИГРОВОЙ СТОЛ <span></span></div><div class="gun-light"></div><div class="gun-plaque ttl">THE LAST ROUND</div>
+  <div class="gun-weapon">${gunSvg(S.sawed, stockAvatar)}${!S.hardcore ? `<div class="shells shells-on-gun" aria-label="Лента оставшихся патронов над стволом">${shellsHtml()}</div>` : ""}</div><div class="gun-caption">${S.sawed ? "ОБРЕЗ · ДВА СТВОЛА" : "ДВУСТВОЛЬНЫЙ ДРОБОВИК"}</div>
+  <div class="gcount">${cnt}${S.hardcore ? "<br>💀 Остаток патронов скрыт" : ""}${S.sawed ? "<br>🪚 Ствол обрезан — боевой выстрел = 2 урона" : ""}</div>
+  </section><div class="log"><div class="loghead"><span>Последние события</span>${S.hardcore ? "" : '<button class="logmore" data-a="history">Вся история</button>'}</div>${logs}</div></div>${dockHtml()}${veil}`;
+  const ni = $("#items"); if (ni) ni.scrollLeft = sx; const nm2 = $(".main"); if (nm2) nm2.scrollTop = sy;
+  tickAfk();
+}
+function tickAfk() {
+  const b = $("#afkBtn"); if (!b || !S || S.afk == null) return;
+  const left = Math.max(0, Math.ceil(S.afk - (Date.now() - recvAt) / 1000));
+  b.textContent = left > 0 ? `⏰ Выгнать молчуна (через ${left} с)` : "⏰ Выгнать молчуна"; b.disabled = left > 0;
+}
+setInterval(tickAfk, 1000);
+function render() {
+  if (!S) return;
+  if (S.state === "lobby") renderLobby(); else {
+    renderGame();
+    if (S.state === "play" && S.me >= 0 && S.turn === S.me && selTarget !== null && S.players[selTarget]?.alive) aimAtPlayer(selTarget, true);
+  }
+}
+
+/* ───────── цикл опроса ───────── */
+function enter(code) { eventPlayback = Promise.resolve(); pendingEventBatches = 0; deferredLog = null; clearAimFx(); document.querySelectorAll(".pov-threat").forEach(x => x.remove()); room = code; localStorage.setItem("bk_room", code); ver = -1; lastEv = null; S = null; selTarget = null; token++; closeModal(); loop(token); }
+async function loop(tk) {
+  while (tk === token) {
+    const r = await api("poll", {room, since: ver, pace: BOT_PACES[playSpeed] || BOT_PACES.slow});
+    if (tk !== token) return;
+    if (r.error === "auth") { renderNoAuth(); return; }
+    if (r.error === "net" || r.error) { $("#net").style.display = "block"; await sleep(1500); continue; }
+    $("#net").style.display = "none";
+    if (r.gone) { toast("Стол закрыт"); renderHome(); return; }
+    if (r.state) { await onState(r.state, tk); ver = r.ver; }
+  }
+}
+async function onState(st, tk) {
+  const hadGameState = !!(S && S.state !== "lobby");
+  const previousLog = S ? S.log.slice() : [];
+  const evs = (lastEv === null) ? [] : st.ev.filter(e => e.id > lastEv);
+  lastEv = st.evmax;
+  if (tk !== token) return;
+  const prevTurn = S ? S.turn : -2;
+  S = st; recvAt = Date.now();
+  if (S.turn !== prevTurn || (selTarget !== null && !(S.players[selTarget] && S.players[selTarget].alive))) { selTarget = null; clearAimFx(); }
+  if (modalKind === "item" && itemInspectOnOwnTurn && !(S.state === "play" && S.me >= 0 && S.turn === S.me)) closeModal();
+
+  // Не показываем новые строки журнала и экран итогов раньше связанных
+  // анимаций. Авторитетное S обновляется сразу, очередь влияет только на показ.
+  if (evs.length && hadGameState) {
+    if (pendingEventBatches === 0) deferredLog = previousLog;
+    pendingEventBatches++;
+    const batch = evs.slice();
+    const playback = eventPlayback.catch(() => {}).then(() => playEvents(batch));
+    eventPlayback = playback.catch(() => {}).then(() => {
+      pendingEventBatches = Math.max(0, pendingEventBatches - 1);
+      if (pendingEventBatches === 0) {
+        deferredLog = null;
+        if (tk === token) render();
+      }
+    });
+  }
+  render();
+}
+
+async function act(body) {
+  if (busy) return null; busy = true;
+  try {
+    const r = await api("act", Object.assign({room}, body));
+    if (r.error === "net") { toast(r.msg); return null; }
+    if (r.error) { toast(r.msg || "Ошибка"); return null; }
+    if (r.gone || r.left) { renderHome(); return null; }
+    if (r.alert) reveal(r.alert);
+    return r;
+  } finally { busy = false; }
+}
+
+/* ───────── действия ───────── */
+function itemModal(k) {
+  const it = ITEMS[k], my = S.state === "play" && S.me >= 0 && S.turn === S.me;
+  const owned = S.me >= 0 && S.players[S.me] ? S.players[S.me].items.filter(x => x === k).length : 0;
+  const u = my && S.usable ? S.usable[k] : null;
+  let action = "";
+  if (my) {
+    if (u && !u.ok) action = `<div class="item-warning"><span>!</span><div><b>Сейчас нельзя применить</b><small>${esc(u.why)}</small></div></div>`;
+    else {
+      if (k === "cuffs") action = `<div class="item-prompt">ВЫБЕРИТЕ ЦЕЛЬ</div>` + S.cuff.map(i => `<button class="btn item-target" data-a="cuffto" data-i="${i}">⛓️ ${esc(S.players[i].name)}</button>`).join("");
+      else if (k === "adr") action = `<div class="item-prompt">У КОГО УКРАСТЬ ПРЕДМЕТ?</div>` + Object.keys(S.steal).map(v => `<button class="btn item-target" data-a="adrv" data-v="${v}">💉 ${esc(S.players[v].name)}</button>`).join("");
+      else action = `<button class="btn primary item-use" data-a="use" data-k="${k}"><span>ИСПОЛЬЗОВАТЬ ПРЕДМЕТ</span><span>↗</span></button>`;
+    }
+  } else {
+    action = `<div class="item-inspect-note">${S.state === "play" ? "Предмет можно применить только в свой ход." : "Осмотр предмета"}</div>`;
+  }
+  const b = `<div class="item-detail">
+    <div class="item-detail-art"><span class="item-detail-halo"></span><span class="item-detail-emoji">${it.e}</span><span class="item-detail-count">В НАЛИЧИИ · ${owned}</span></div>
+    <div class="item-detail-kicker">КАРТОЧКА ПРЕДМЕТА · ПРОЧИТАЙТЕ ПЕРЕД ПРИМЕНЕНИЕМ</div>
+    <h3 class="ttl c">${it.n}</h3><p class="c item-detail-desc">${it.d}</p>
+    ${action}
+  </div>`;
+  itemInspectOnOwnTurn = my;
+  openModal(`<div class="sheet item-fullscreen">${b}<button class="btn ghost" data-a="close">Закрыть</button></div>`, "item");
+  const art = $(".item-detail-art"); if (art) { art.classList.add("item-preview"); setTimeout(()=>art.classList.remove("item-preview"),460); }
+}
+function seatModal(i) {
+  const p = S.players[i]; const cnt = {}; p.items.forEach(k => cnt[k] = (cnt[k] || 0) + 1);
+  const list = Object.keys(cnt).map(k => `<div class="rules"><div class="it"><span class="e">${ITEMS[k].e}</span><div><b>${ITEMS[k].n}${cnt[k] > 1 ? " ×" + cnt[k] : ""}</b>${ITEMS[k].d}</div></div></div>`).join("");
+  const canShoot = S.state === "play" && S.me >= 0 && S.turn === S.me && p.alive;
+  const shootAction = canShoot ? `<button class="btn primary" data-a="seatfire" data-i="${i}">🎯 Выстрелить в ${esc(p.name)}</button>` : (S.state === "play" && S.turn === S.me && !p.alive ? '<p class="c dim">Игрок выбыл — выбрать его целью нельзя.</p>' : '');
+  openModal(sheet(`<h3 class="ttl c">${esc(p.name)}</h3><p class="c">${p.alive ? "🩸".repeat(p.hp) + "🖤".repeat(p.max - p.hp) : "⚰️ мёртв"}${p.cuffed ? " · ⛓️ скован" : ""}</p>
+    ${list || '<p class="c dim">Предметов нет</p>'}${shootAction}<button class="btn ghost" data-a="close">Закрыть</button>`));
+}
+async function showProfile() {
+  const r = await api("profile"); if (r.error) return toast(r.msg || "Не удалось загрузить профиль");
+  const p = r.profile;
+  const ach = p.achievements.map(a => `<div class="ach ${a.done ? "done" : ""}"><div class="ai">${a.icon}</div><div class="ad"><b>${esc(a.name)}</b><br>${esc(a.desc)}</div><div>${a.done ? "✓" : "🔒"}</div></div>`).join("");
+  openModal(sheet(`<h3 class="ttl c">Профиль игрока</h3><p class="c">${esc(p.name)}</p>
+    <div class="profile-grid"><div class="statbox"><b>${p.games}</b><span>Матчей</span></div><div class="statbox"><b>${p.wins}</b><span>Побед</span></div>
+    <div class="statbox"><b>${p.losses}</b><span>Поражений</span></div><div class="statbox"><b>${p.win_rate}%</b><span>Побед</span></div></div>
+    <p><b>Выиграно раундов:</b> ${p.rounds_won}</p><h3 class="ttl">Достижения</h3>${ach}<button class="btn ghost" data-a="close">Закрыть</button>`));
+}
+async function showLeaderboard() {
+  const r = await api("leaderboard"); if (r.error) return toast(r.msg || "Не удалось загрузить рейтинг");
+  const rows = r.rows.length ? r.rows.map((p,i)=>`<div class="rankrow"><span class="rank">${i+1}</span><span>${esc(p.name)}<br><small class="dim">${p.games} матч. · ${p.rounds_won} раундов</small></span><span class="score">🏆 ${p.wins}</span></div>`).join("") : '<p class="c dim">Рейтинг пока пуст. Сыграйте первый матч!</p>';
+  openModal(sheet(`<h3 class="ttl c">Таблица лидеров</h3>${rows}<button class="btn ghost" data-a="close">Закрыть</button>`));
+}
+async function showMatches() {
+  const r = await api("history"); if (r.error) return toast(r.msg || "Не удалось загрузить историю");
+  const rows = r.matches.length ? r.matches.map(m=>`<div class="matchrow"><b>${m.won ? "🏆 Победа" : "🥀 Поражение"}</b> · ${m.hardcore ? "💀 Хардкор" : "Облегчённый режим"}<br><span class="muted">${new Date(m.played_at*1000).toLocaleString("ru-RU")} · стол ${esc(m.room)}</span><br>Участники: ${m.players.map(esc).join(", ")}<br>Победитель: ${esc(m.winner)}</div>`).join("") : '<p class="c dim">Завершённых матчей пока нет.</p>';
+  openModal(sheet(`<h3 class="ttl c">История матчей</h3>${rows}<button class="btn ghost" data-a="close">Закрыть</button>`));
+}
+function showSettings() {
+  const speedName = {slow:"Медленная",normal:"Обычная",fast:"Быстрая"};
+  const cinemaName = {full:"Полные",reduced:"Умеренные",minimal:"Минимальные"};
+  openModal(sheet(`<h3 class="ttl c">Настройки игры</h3>
+    <h4>Темп игры с ботом</h4><div class="settings-line"><span>Скорость</span><button class="btn" data-a="speed">${speedName[playSpeed] || "Медленная"} · изменить</button></div>
+    <h4>Визуальные эффекты</h4><div class="settings-line"><span>Кинематографичность</span><button class="btn" data-a="cinema">${cinemaName[cinemaMode] || "Полные"} · изменить</button></div>
+    <div class="settings-line"><span>Плавные анимации</span><button class="btn ${smoothMotion ? "primary" : "ghost"}" data-a="motion">${smoothMotion ? "Включены" : "Выключены"}</button></div>
+    <h4>Звук</h4><div class="settings-line"><span>Звуковые эффекты</span><button class="btn ${muted ? "ghost" : "primary"}" data-a="snd">${muted ? "Выключены" : "Включены"}</button></div>
+    <div class="settings-line"><span>Фоновая атмосфера</span><button class="btn ${musicOn ? "primary" : "ghost"}" data-a="music">${musicOn ? "Включена" : "Выключена"}</button></div>
+    <div class="settings-line"><span>Громкость эффектов</span><button class="btn" data-a="volume">${Math.round(sfxVolume*100)}% · изменить</button></div>
+    <div class="settings-line"><span>Проверка звука</span><button class="btn ghost" data-a="soundtest">▶ Прослушать</button></div>
+    <p class="dim">Настройки сохраняются на этом устройстве. Системная настройка «Уменьшение движения» имеет приоритет над анимациями.</p><button class="btn ghost" data-a="close">Закрыть</button>`));
+}
+
+const H = {
+  async create() { const r = await api("create", {bot: false}); r.error ? toast(r.msg) : enter(r.room); },
+  async vsbot() { const r = await api("create", {bot: true}); if (r.error) return toast(r.msg); enter(r.room);
+    await sleep(300); busy = false; await act({type: "begin"}); },
+  async join() { const c = ($("#code").value || "").trim().toUpperCase(); if (c.length < 4) return toast("Введите код из 4 символов");
+    const r = await api("join", {room: c}); r.error ? toast(r.msg) : enter(r.room); },
+  close() { closeModal(); },
+  rules() { openModal(sheet(RULES_HTML)); },
+  profile() { showProfile(); },
+  leaderboard() { showLeaderboard(); },
+  matches() { showMatches(); },
+  settings() { showSettings(); },
+  menu() { openModal(sheet(`<h3 class="ttl c">Меню</h3><button class="btn" data-a="rules">📖 Правила</button>
+    <button class="btn" data-a="profile">👤 Профиль</button><button class="btn" data-a="leaderboard">🏆 Рейтинг</button><button class="btn" data-a="matches">📜 История матчей</button>
+    <button class="btn" data-a="settings">⚙️ Настройки игры</button>
+    <button class="btn" data-a="home">🏠 В главное меню</button><button class="btn ghost" data-a="close">Закрыть</button>`)); },
+  snd() { muted = !muted; localStorage.setItem("bk_mute", muted ? "1" : "0"); if (!muted) snd("click"); showSettings(); },
+  speed() { playSpeed = ({slow:"normal",normal:"fast",fast:"slow"})[playSpeed] || "slow"; localStorage.setItem("bk_speed", playSpeed); showSettings(); },
+  cinema() { cinemaMode = ({full:"reduced",reduced:"minimal",minimal:"full"})[cinemaMode] || "full"; localStorage.setItem("bk_cinema", cinemaMode); applyVisualSettings(); showSettings(); },
+  motion() { smoothMotion = !smoothMotion; localStorage.setItem("bk_motion", smoothMotion ? "1" : "0"); applyVisualSettings(); showSettings(); },
+  music() { setMusic(!musicOn); showSettings(); },
+  volume() { sfxVolume = sfxVolume >= 0.95 ? 0.4 : sfxVolume + 0.3; localStorage.setItem("bk_sfx_volume", String(sfxVolume)); showSettings(); },
+  soundtest() { snd("boom"); setTimeout(()=>snd("load"),650); },
+  home() { closeModal(); renderHome(); },
+  copy() { const link = inviteLink(); try { navigator.clipboard.writeText(link); toast("Ссылка скопирована"); } catch (e) { toast(S.code); } },
+  invite() {
+    const link = inviteLink(), text = "Садись за стол. ☠️ Buckshot Roulette. Код стола: " + S.code;
+    const url = "https://t.me/share/url?url=" + encodeURIComponent(link) + "&text=" + encodeURIComponent(text);
+    if (tg && tg.openTelegramLink && S.bot) tg.openTelegramLink(url); else { try { navigator.clipboard.writeText(link); } catch (e) {} toast("Ссылка скопирована: " + link); }
+  },
+  mode(d) { act({type: "mode", on: d.on === "1"}); },
+  ready() { act({type: "ready"}); },
+  async leavewatch() { await act({type: "leave"}); renderHome(); },
+  addbot() { act({type: "addbot"}); },
+  kick(d) { act({type: "kick", to: +d.i}); },
+  host(d) { act({type: "host", to: +d.i}); },
+  begin() { act({type: "begin"}); },
+  async leave() { await act({type: "leave"}); renderHome(); },
+  pick(d) {
+    if (!S || S.state !== "play" || S.me < 0 || S.turn !== S.me) return;
+    const i = Number(d.i);
+    if (!Number.isInteger(i) || !S.players[i] || !S.players[i].alive) return;
+    selTarget = i; snd("tick"); render();
+  },
+  fire() { if (selTarget === null) return; const t = selTarget; const target = t === S.me ? "в себя" : "в " + S.players[t].name;
+    openModal(sheet(`<h3 class="ttl c">Подтвердить выстрел?</h3><p class="c">Вы целитесь ${esc(target)}.</p><button class="btn primary" data-a="confirmfire">Подтвердить выстрел</button><button class="btn ghost" data-a="close">Отмена</button>`), "confirm"); },
+  async confirmfire() { if (selTarget === null) return closeModal(); const t = selTarget; selTarget = null; closeModal(); await act({type: "shoot", to: t}); },
+  history() { openModal(sheet(`<h3 class="ttl c">История раунда</h3>${S.log.map(l=>`<div class="rules it">${l}</div>`).join("")}<button class="btn ghost" data-a="close">Закрыть</button>`)); },
+  item(d) { itemModal(d.k); },
+  seat(d) { seatModal(+d.i); },
+  seatfire(d) {
+    const i = Number(d.i);
+    if (!S || S.state !== "play" || S.me < 0 || S.turn !== S.me || !Number.isInteger(i) || !S.players[i] || !S.players[i].alive) return;
+    selTarget = i; closeModal(); render(); H.fire();
+  },
+  async use(d) { closeModal(); await act({type: "item", item: d.k}); },
+  async cuffto(d) { closeModal(); await act({type: "item", item: "cuffs", to: +d.i}); },
+  adrv(d) { const v = d.v, lst = S.steal[v] || [];
+    openModal(sheet(`<h3 class="ttl c">Что украсть у ${esc(S.players[v].name)}?</h3>` + lst.map(k => `<button class="btn" data-a="adri" data-v="${v}" data-k="${k}">${ITEMS[k].e} ${ITEMS[k].n}</button>`).join("") + `<button class="btn ghost" data-a="close">Закрыть</button>`), "item"); },
+  async adri(d) {
+    if (d.k === "cuffs") { openModal(sheet(`<h3 class="ttl c">Кого сковать?</h3>` + S.cuff.map(i => `<button class="btn" data-a="adrc" data-v="${d.v}" data-i="${i}">⛓️ ${esc(S.players[i].name)}</button>`).join("") + `<button class="btn ghost" data-a="close">Закрыть</button>`), "item"); return; }
+    closeModal(); await act({type: "adr", victim: +d.v, item: d.k});
+  },
+  async adrc(d) { closeModal(); await act({type: "adr", victim: +d.v, item: "cuffs", to: +d.i}); },
+  afk() { act({type: "afk"}); },
+  next() { act({type: "next"}); },
+  rematch() { act({type: "rematch"}); }
+};
+function inviteLink() { return S && S.bot ? `https://t.me/${S.bot}?start=room_${S.code}` : `${location.origin}/?room=${S.code}`; }
+document.addEventListener("click", e => { const el = e.target.closest("[data-a]"); if (!el) return;
+  const f = H[el.dataset.a]; if (f) { ctx(); if (musicOn && !ambientNodes.length) setMusic(true); f(el.dataset); } });
+
+/* ───────── старт ───────── */
+async function boot() {
+  if (!INIT) { renderNoAuth(); return; }
+  const q = new URLSearchParams(location.search);
+  let code = (q.get("room") || (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || "").toUpperCase().replace(/^ROOM_/, "");
+  const fromLink = !!code;
+  if (!code) code = localStorage.getItem("bk_room") || "";
+  if (code) {
+    const r = await api("join", {room: code});
+    if (r.error === "auth") { renderNoAuth(); return; }
+    if (!r.error) { enter(r.room); return; }
+    localStorage.removeItem("bk_room");
+    renderHome(); if (fromLink) toast(r.msg); return;
+  }
+  renderHome();
+}
+boot();
+</script>
+</body>
+</html>

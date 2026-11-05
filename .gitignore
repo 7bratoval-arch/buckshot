@@ -1,0 +1,8 @@
+.env
+buckshot.sqlite3
+__pycache__/
+*.py[cod]
+cloudflared
+cloudflared.exe
+*.rar
+*.zip

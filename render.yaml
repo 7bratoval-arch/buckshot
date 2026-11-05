@@ -1,0 +1,12 @@
+# Необязательно: "чертёж" для Render (New → Blueprint). Можно создавать сервис и вручную.
+services:
+  - type: web
+    name: buckshot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false      # токен вводится вручную в панели Render
