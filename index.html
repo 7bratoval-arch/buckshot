@@ -22,11 +22,14 @@ input{-webkit-user-select:text;user-select:text}
 .btn{appearance:none;display:block;width:100%;border:1px solid var(--edge2);background:linear-gradient(#251615,#170e0e);color:var(--bone);padding:14px 16px;border-radius:12px;font-weight:700;font-size:15px;letter-spacing:.05em;cursor:pointer;margin-top:10px;transition:transform .1s}
 .btn:active{transform:scale(.98)}
 .btn.primary{background:linear-gradient(#b3171c,#6e0b10);border-color:#e0383d;color:#fff;box-shadow:0 0 22px rgba(193,18,31,.38)}
-.btn.fire{font-size:16px;padding:16px;animation:pulse 1.7s infinite}
+.btn.fire{position:relative;font-size:16px;padding:16px}
+/* Пульсация через opacity псевдоэлемента: анимация box-shadow перерисовывалась каждый кадр */
+.btn.fire::after{content:"";position:absolute;inset:-1px;border-radius:inherit;box-shadow:0 0 32px rgba(255,59,48,.6);opacity:0;pointer-events:none;animation:pulse 1.7s infinite}
+.btn.fire:disabled::after{animation:none;opacity:0}
 .btn.ghost{background:transparent;border-color:var(--edge)}
 .btn.small{width:auto;display:inline-block;padding:8px 12px;font-size:13px;margin:0}
 .btn:disabled{opacity:.35;box-shadow:none;animation:none;cursor:default}
-@keyframes pulse{50%{box-shadow:0 0 32px rgba(255,59,48,.6)}}
+@keyframes pulse{50%{opacity:1}}
 .ic{appearance:none;background:none;border:1px solid var(--edge);color:var(--bone);border-radius:10px;width:38px;height:38px;font-size:17px}
 /* HOME */
 .home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;overflow:auto}
@@ -107,7 +110,7 @@ input{-webkit-user-select:text;user-select:text}
 .icard.off{opacity:.45}
 .none{font-size:12.5px;color:var(--dim);padding:10px 0;text-align:center;width:100%}
 /* PHASE 3.7.5 — VISUAL DIRECTING */
-#modal.item-inspect .back{background:rgba(0,0,0,.88);backdrop-filter:blur(7px)}
+#modal.item-inspect .back{background:rgba(0,0,0,.93)}
 #modal.item-inspect .sheet.item-fullscreen{position:absolute;left:50%;top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(94vw,480px);max-width:480px;max-height:min(88dvh,760px);overflow:auto;border:1px solid rgba(190,132,83,.55);border-radius:22px;padding:clamp(18px,4vw,28px);padding-bottom:max(20px,env(safe-area-inset-bottom));box-shadow:0 24px 90px rgba(0,0,0,.8),0 0 48px rgba(193,18,31,.18);animation:item-full-in .28s cubic-bezier(.2,.8,.2,1)}
 @keyframes item-full-in{from{opacity:0;transform:translate(-50%,-47%) scale(.96)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 #modal.item-inspect .item-detail-art{min-height:clamp(170px,32vh,250px);margin-bottom:18px}
@@ -445,6 +448,7 @@ input{-webkit-user-select:text;user-select:text}
 /* PHASE 3.7 — item action choreography */
 .item-burst{position:fixed;z-index:90;left:50%;top:43%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;min-width:150px;padding:18px 24px;border:1px solid rgba(190,145,89,.48);border-radius:18px;background:radial-gradient(ellipse at 50% 0,rgba(139,48,34,.5),transparent 70%),linear-gradient(145deg,rgba(35,20,17,.97),rgba(8,5,5,.97));box-shadow:0 18px 60px #000,0 0 34px rgba(193,18,31,.2);animation:item-burst-in .24s ease-out both}
 .item-burst .ib-icon{display:block;font-size:48px;line-height:1.25;filter:drop-shadow(0 0 14px rgba(255,180,100,.4))}
+.item-burst .ib-who{display:block;margin-top:6px;color:#d8c9b8;font-size:12px;font-weight:700;letter-spacing:.04em}
 .item-burst .ib-name{display:block;margin-top:7px;color:#e6c18b;font-size:11px;font-weight:900;letter-spacing:.2em;text-transform:uppercase}
 .item-burst .ib-note{display:block;margin-top:5px;color:#d8c9b8;font-size:12px}
 .item-burst.glass{box-shadow:0 18px 60px #000,0 0 35px rgba(100,190,255,.25)}
@@ -506,6 +510,9 @@ if (tg) { try { tg.ready(); tg.expand(); tg.setHeaderColor("#070405"); tg.setBac
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Полная перестройка #app сбрасывает CSS-анимации и заново растрирует SVG дробовика.
+// Если разметка не изменилась, DOM не трогаем.
+const APP = { _last: "", set html(v) { if (v === this._last) return; this._last = v; $("#app").innerHTML = v; } };
 const ROMAN = ["","I","II","III","IV","V","VI","VII","VIII","IX","X"];
 const roman = n => ROMAN[n] || n;
 const ITEMS = {
@@ -526,11 +533,14 @@ function devInit() { const q = new URLSearchParams(location.search), n = q.get("
   return n ? "dev:" + (q.get("devid") || "1") + ":" + n : ""; }
 const INIT = (tg && tg.initData) || devInit();
 async function api(path, body) {
+  // Сервер держит poll до 20 с; если ответа нет дольше — соединение «зависло», пробуем заново.
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), path === "poll" ? 35000 : 20000);
   try {
-    const r = await fetch("/api/" + path, {method:"POST", headers:{"Content-Type":"application/json"},
+    const r = await fetch("/api/" + path, {method:"POST", headers:{"Content-Type":"application/json"}, signal: ac.signal,
       body: JSON.stringify(Object.assign({initData: INIT}, body || {}))});
     return await r.json();
   } catch (e) { return {error:"net", msg:"Нет связи с сервером"}; }
+  finally { clearTimeout(t); }
 }
 let S = null, room = null, ver = -1, lastEv = null, token = 0, busy = false;
 let selTarget = null, aimedIndex = null, modalKind = null, itemInspectOnOwnTurn = false, recvAt = 0, lastKey = "";
@@ -541,7 +551,8 @@ let pendingEventBatches = 0, deferredLog = null;
 let AC = null, muted = localStorage.getItem("bk_mute") === "1";
 let musicOn = localStorage.getItem("bk_music") === "1";
 let playSpeed = localStorage.getItem("bk_speed") || "slow";
-let cinemaMode = localStorage.getItem("bk_cinema") || "full";
+const lowEnd = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 4) <= 2;
+let cinemaMode = localStorage.getItem("bk_cinema") || (lowEnd ? "reduced" : "full");
 let smoothMotion = localStorage.getItem("bk_motion") !== "0";
 const BOT_PACES = {slow:7.5, normal:4.8, fast:2.8};
 function applyVisualSettings() {
@@ -611,12 +622,15 @@ function toast(t) { const e = $("#toast"); e.textContent = t; e.style.display = 
   toastT = setTimeout(() => e.style.display = "none", 2600); }
 const nm = i => (S && S.players[i]) ? esc(S.players[i].name) : "?";
 
-function itemBurst(e, stolen) {
+function itemBurst(e, hold = 1400) {
   const k = e.item, it = ITEMS[k]; if (!it) return;
   const d = document.createElement("div"); d.className = "item-burst " + k;
   const labels = {glass:"ТАЙНАЯ ИНФОРМАЦИЯ",beer:"ПАТРОН ИЗВЛЕЧЁН",cig:"ВОССТАНОВЛЕНИЕ",cuffs:"ЦЕЛЬ СКОВАНА",saw:"СТВОЛ УСИЛЕН",med:"ЭФФЕКТ ПРЕПАРАТА",inv:"ПАТРОН ИЗМЕНЁН",phone:"СИГНАЛ ПОЛУЧЕН",adr:"АДРЕНАЛИН"};
-  d.innerHTML = `<span class="ib-icon">${it.e}</span><span class="ib-name">${stolen ? "КРАЖА · " : "ПРИМЕНЕНИЕ · "}${esc(it.n)}</span><span class="ib-note">${labels[k] || "ДЕЙСТВИЕ ВЫПОЛНЕНО"}</span>`;
-  document.body.appendChild(d); setTimeout(()=>{d.classList.add("out");setTimeout(()=>d.remove(),240)},720);
+  let note = labels[k] || "ДЕЙСТВИЕ ВЫПОЛНЕНО";
+  // Пиво показывает всем, какой патрон выброшен (в хардкоре больше нигде не видно)
+  if (k === "beer" && typeof e.live === "boolean") note = e.live ? "🔴 БОЕВОЙ ПАТРОН ИЗВЛЕЧЁН" : "⚪ ХОЛОСТОЙ ПАТРОН ИЗВЛЕЧЁН";
+  d.innerHTML = `<span class="ib-icon">${it.e}</span><span class="ib-who">${nm(e.by)} применяет</span><span class="ib-name">${esc(it.n)}</span><span class="ib-note">${note}</span>`;
+  document.body.appendChild(d); setTimeout(()=>{d.classList.add("out");setTimeout(()=>d.remove(),240)},Math.max(500, hold - 240));
   const target = Number.isInteger(e.to) ? document.querySelector(`.seat[data-i="${e.to}"]`) : null;
   if (target) { target.classList.remove("item-targeted"); void target.offsetWidth; target.classList.add("item-targeted"); setTimeout(()=>target.classList.remove("item-targeted"),800); }
   const own = Number.isInteger(e.by) ? document.querySelector(`.seat[data-i="${e.by}"]`) : null;
@@ -738,14 +752,16 @@ async function playEvents(evs) {
     if (e.k === "shot") await shotFx(e);
     else if (e.k === "item") {
       const wait = playSpeed === "slow" ? 1800 : playSpeed === "normal" ? 1450 : 1100;
-      itemBurst(e, false); fx(`<span class="em">${ITEMS[e.item].e}</span>${nm(e.by)}: ${ITEMS[e.item].n}`, wait);
+      // Одно уведомление на предмет. Раньше показывались большая карточка и маленькая плашка
+      // одновременно; карточка исчезала раньше, и плашка «досиживала» паузу.
+      const sawMs = e.item === "saw" ? (playSpeed === "slow" ? 1250 : 950) : 0;
+      itemBurst(e, wait + sawMs);
       snd(e.item in SND ? e.item : "tick");
-      if (e.item === "saw") { const g=$(".gun"); if(g){g.classList.add("sawing");await sleep(playSpeed === "slow" ? 1250 : 950);g.classList.remove("sawing");g.classList.add("weapon-settle");setTimeout(()=>g.classList.remove("weapon-settle"),650);} }
+      if (sawMs) { const g=$(".gun"); if(g){g.classList.add("sawing");await sleep(sawMs);g.classList.remove("sawing");g.classList.add("weapon-settle");setTimeout(()=>g.classList.remove("weapon-settle"),650);} }
       await sleep(wait);
     }
     else if (e.k === "steal") {
-      itemBurst(e, true);
-      fx(`<span class="em">💉</span>${nm(e.by)} крадёт ${ITEMS[e.item].e} у ${nm(e.victim)}`, playSpeed === "slow" ? 2600 : 2200);
+      // Только анимация кражи (подпись, штамп и перелёт значка): отдельные карточка и плашка дублировали её.
       await stealFx(e);
     }
     else if (e.k === "reload") {
@@ -782,7 +798,6 @@ async function shotFx(e) {
   let pov = null;
   try {
     directorToast(incoming ? `${nm(e.by)} НАПРАВИЛ ДРОБОВИК НА ВАС` : e.to === e.by ? `${nm(e.by)} НАПРАВИЛ ОРУЖИЕ НА СЕБЯ` : `${nm(e.by)} НАПРАВИЛ ОРУЖИЕ НА ${nm(e.to)}`);
-    fx(e.to === e.by ? `${nm(e.by)} целится <b>в себя</b>…` : `${nm(e.by)} <b>→</b> ${nm(e.to)}`, 1500);
     if (incoming && cinemaMode === "full" && smoothMotion && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       pov = document.createElement("div"); pov.className = "pov-threat";
       pov.innerHTML = '<div class="pov-vignette"></div><div class="pov-muzzle"><i></i><b></b></div><div class="pov-label">СТВОЛ НАПРАВЛЕН НА ВАС</div>';
@@ -838,9 +853,9 @@ function gunSvg(sawed, stockAvatar = "") {
     <linearGradient id="gunSteel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#aaa29a"/><stop offset=".13" stop-color="#55504d"/><stop offset=".48" stop-color="#211d1c"/><stop offset=".78" stop-color="#090909"/><stop offset="1" stop-color="#39312d"/></linearGradient>
     <linearGradient id="gunWood" x1="0" y1="0" x2=".12" y2="1"><stop offset="0" stop-color="#98623a"/><stop offset=".28" stop-color="#63391f"/><stop offset=".72" stop-color="#321b11"/><stop offset="1" stop-color="#160d09"/></linearGradient>
     <linearGradient id="gunHighlight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1d4a0" stop-opacity=".6"/><stop offset="1" stop-color="#f1d4a0" stop-opacity="0"/></linearGradient>
-    <filter id="gunShadow" x="-20%" y="-60%" width="140%" height="240%"><feGaussianBlur stdDeviation="4"/></filter>
+    <radialGradient id="gunShadowGrad"><stop offset="0" stop-color="#000" stop-opacity=".78"/><stop offset=".55" stop-color="#000" stop-opacity=".42"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
   </defs>
-  <ellipse cx="213" cy="91" rx="190" ry="11" fill="#000" opacity=".72" filter="url(#gunShadow)"/>
+  <ellipse cx="213" cy="91" rx="205" ry="15" fill="url(#gunShadowGrad)"/>
   <!-- деревянный приклад -->
   <path d="M12 43 Q7 39 12 31 L28 25 L108 31 L133 39 L133 68 L108 76 L37 88 Q19 88 15 74Z" fill="url(#gunWood)" stroke="#160b07" stroke-width="3"/>
   <path d="M21 42 Q54 35 104 42 M24 56 Q68 48 120 54 M30 70 Q68 62 111 64" fill="none" stroke="#c18a54" stroke-opacity=".22" stroke-width="2"/>
@@ -872,12 +887,12 @@ function gunSvg(sawed, stockAvatar = "") {
   </svg>`;
 }
 function renderNoAuth() {
-  $("#app").innerHTML = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Только через Telegram</h1>
+  APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Только через Telegram</h1>
   <p class="tag">Откройте бота и нажмите кнопку «☠️ Играть» слева от поля ввода.</p></div>`;
 }
 function renderHome() {
   S = null; room = null; token++; localStorage.removeItem("bk_room");
-  $("#app").innerHTML = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
+  APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
   <p class="tag">Сырой подвал. Тусклая лампа.<br>Один дробовик на всех.</p>${gunSvg(false)}
   <div class="col"><button class="btn primary" data-a="create">☠ Накрыть стол</button>
   <button class="btn" data-a="vsbot">🎭 Сыграть против бота</button>
@@ -890,7 +905,7 @@ function renderLobby() {
   const host = S.host, imHost = S.players.some(p => p.id === host && S.players.indexOf(p) === S.me);
   const mine = S.me >= 0 ? S.players[S.me] : null;
   if (!mine) {
-    $("#app").innerHTML = `<div class="lobby"><div class="hd"><div class="t ttl">Стол ${esc(S.code)}</div><div class="spectator-tag">👁 РЕЖИМ НАБЛЮДЕНИЯ</div></div><p class="c dim">Вы наблюдаете за подготовкой игроков. Когда начнётся матч, вы сможете следить за ходом игры.</p><div class="srow">Участников: ${S.players.length} · Зрителей: ${S.spectators || 0}</div><button class="btn ghost" data-a="leavewatch">Покинуть наблюдение</button></div>`;
+    APP.html = `<div class="lobby"><div class="hd"><div class="t ttl">Стол ${esc(S.code)}</div><div class="spectator-tag">👁 РЕЖИМ НАБЛЮДЕНИЯ</div></div><p class="c dim">Вы наблюдаете за подготовкой игроков. Когда начнётся матч, вы сможете следить за ходом игры.</p><div class="srow">Участников: ${S.players.length} · Зрителей: ${S.spectators || 0}</div><button class="btn ghost" data-a="leavewatch">Покинуть наблюдение</button></div>`;
     return;
   }
   const allReady = S.players.every(p => p.bot || p.ready);
@@ -903,7 +918,7 @@ function renderLobby() {
       <div class="nm">${esc(p.name)}${i === S.me ? ' <small class="dim">(вы)</small>' : ""}</div>${p.id === host ? "<span>👑</span>" : ""}<span class="${p.bot || p.ready ? "ready" : "notready"}">${p.bot ? "БОТ · ГОТОВ" : p.ready ? "ГОТОВ" : "НЕ ГОТОВ"}</span>${tools}</div>`;
   }
   const hc = S.hardcore;
-  $("#app").innerHTML = `<div class="lobby"><div class="hd"><div class="t ttl">Стол</div><div class="code" data-a="copy">${esc(S.code)}</div></div>
+  APP.html = `<div class="lobby"><div class="hd"><div class="t ttl">Стол</div><div class="code" data-a="copy">${esc(S.code)}</div></div>
   <button class="btn primary" data-a="invite">📨 Пригласить друзей</button>
   ${rows}
   <div class="seg"><button class="${hc ? "on" : ""}" data-a="mode" data-on="1">Хардкор 💀</button><button class="${hc ? "" : "on"}" data-a="mode" data-on="0">Облегчённый</button></div>
@@ -1020,7 +1035,7 @@ function renderGame() {
         <button class="btn ghost result-secondary" data-a="home">В главное меню</button>
       </div></div>`;
   }
-  $("#app").innerHTML = `<div class="top"><button class="ic" data-a="menu">☰</button>
+  APP.html = `<div class="top"><button class="ic" data-a="menu">☰</button>
     <div class="rd ttl">Раунд ${roman(S.round)}${S.hardcore ? '<span class="hc">💀 хардкор</span>' : ""}${S.me < 0 ? ' <span class="spectator-tag">ЗРИТЕЛЬ</span>' : ""}${S.spectators ? ' <span class="spectator-tag">👁 ' + S.spectators + '</span>' : ""}</div>
     <button class="ic" data-a="snd">${muted ? "🔇" : "🔊"}</button></div>
   <div class="main"><div class="score">${wins}</div><div class="seats">${S.players.map(seatHtml).join("")}</div>
@@ -1059,9 +1074,15 @@ async function loop(tk) {
   }
 }
 async function onState(st, tk) {
-  const hadGameState = !!(S && S.state !== "lobby");
+  // Анимации играем, если мы уже были за столом, включая переход «лобби → игра».
+  // Раньше первая зарядка матча (и после реванша) не анимировалась.
+  const hadGameState = !!S;
   const previousLog = S ? S.log.slice() : [];
-  const evs = (lastEv === null) ? [] : st.ev.filter(e => e.id > lastEv);
+  // После реванша сервер начинает новую игру: если номера событий меньше запомненных, сбрасываем
+  if (lastEv !== null && st.evmax < lastEv) lastEv = 0;
+  let evs = (lastEv === null) ? [] : st.ev.filter(e => e.id > lastEv);
+  // Свёрнутое приложение или длинный «хвост» событий: старую хронику не проигрываем
+  if (document.hidden) evs = []; else if (evs.length > 6) evs = evs.slice(-6);
   lastEv = st.evmax;
   if (tk !== token) return;
   const prevTurn = S ? S.turn : -2;
@@ -1094,7 +1115,7 @@ async function act(body) {
     if (r.error === "net") { toast(r.msg); return null; }
     if (r.error) { toast(r.msg || "Ошибка"); return null; }
     if (r.gone || r.left) { renderHome(); return null; }
-    if (r.alert) reveal(r.alert);
+    if (r.alert) { const a = r.alert; setTimeout(() => eventPlayback.catch(() => {}).then(() => reveal(a)), 300); }
     return r;
   } finally { busy = false; }
 }
@@ -1169,7 +1190,10 @@ function showSettings() {
 const H = {
   async create() { const r = await api("create", {bot: false}); r.error ? toast(r.msg) : enter(r.room); },
   async vsbot() { const r = await api("create", {bot: true}); if (r.error) return toast(r.msg); enter(r.room);
-    await sleep(300); busy = false; await act({type: "begin"}); },
+    // Ждём первое состояние стола (а не фиксированные 300 мс): иначе на медленной связи
+    // первая зарядка проходит без анимации, потому что клиент ещё не знает номер последнего события.
+    for (let i = 0; i < 40 && !S; i++) await sleep(100);
+    busy = false; await act({type: "begin"}); },
   async join() { const c = ($("#code").value || "").trim().toUpperCase(); if (c.length < 4) return toast("Введите код из 4 символов");
     const r = await api("join", {room: c}); r.error ? toast(r.msg) : enter(r.room); },
   close() { closeModal(); },

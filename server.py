@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import hmac
 import html
@@ -330,6 +331,9 @@ def do_act(room: Room, user: dict, d: dict) -> dict:
             raise ValueError("Сейчас идёт набор игроков")
 
     elif g.state == "play":
+        if t in ("next", "begin", "rematch"):
+            # Повторное/запоздалое нажатие (например, двое нажали «Следующий раунд» почти одновременно)
+            return {"ok": True, "alert": None}
         if not me and t == "leave":
             room.spectators.discard(uid)
             return {"ok": True, "left": True}
@@ -387,6 +391,9 @@ def do_act(room: Room, user: dict, d: dict) -> dict:
             ng.players.append(np)
         ng.bot_seq = g.bot_seq
         ng.hardcore = g.hardcore
+        # Нумерация событий продолжается: клиент помнит последний id и отбрасывал бы
+        # все события новой игры, пока их номера не перерастут старые.
+        ng.ev_seq = g.ev_seq
         room.game = ng
         room.recorded = False
 
@@ -443,15 +450,36 @@ def ticker():
 # ════════════════════════════════════════════════════════════════════
 #  HTTP
 # ════════════════════════════════════════════════════════════════════
+class Server(ThreadingHTTPServer):
+    request_queue_size = 128   # по умолчанию 5: при нескольких игроках соединения могли отбрасываться
+    daemon_threads = True
+
+
+_INDEX = {"mtime": None, "raw": b"", "gz": b""}
+
+
+def index_bytes(want_gzip: bool):
+    """index.html (118 КБ) сжимается gzip один раз и кэшируется в памяти (~30 КБ по сети)."""
+    f = HERE / "index.html"
+    m = f.stat().st_mtime
+    if _INDEX["mtime"] != m:
+        raw = f.read_bytes()
+        _INDEX.update(mtime=m, raw=raw, gz=gzip.compress(raw, 6))
+    return (_INDEX["gz"], True) if want_gzip else (_INDEX["raw"], False)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "Buckshot/1.0"
+    timeout = 60   # «зависшие» соединения не копятся
 
     def log_message(self, *a):
         pass
 
-    def _send(self, code: int, body: bytes, ctype: str):
+    def _send(self, code: int, body: bytes, ctype: str, extra=None):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("Connection", "close")
@@ -465,9 +493,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
         if path in ("/", "/index.html"):
-            f = HERE / "index.html"
-            if f.exists():
-                self._send(200, f.read_bytes(), "text/html; charset=utf-8")
+            if (HERE / "index.html").exists():
+                gz = "gzip" in (self.headers.get("Accept-Encoding") or "").lower()
+                body, zipped = index_bytes(gz)
+                extra = {"Vary": "Accept-Encoding"}
+                if zipped:
+                    extra["Content-Encoding"] = "gzip"
+                self._send(200, body, "text/html; charset=utf-8", extra)
             else:
                 self._send(404, b"index.html not found", "text/plain")
         elif path == "/health":
@@ -830,7 +862,7 @@ def main():
     # На Render порт жёстко задан платформой — другой занимать нельзя
     for p in ([PORT] if ON_RENDER else range(PORT, PORT + 10)):
         try:
-            httpd = ThreadingHTTPServer((HOST, p), Handler)
+            httpd = Server((HOST, p), Handler)
             PORT = p
             break
         except OSError:

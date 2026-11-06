@@ -345,7 +345,12 @@ class Game:
 
     def _apply(self, p: Player, item: str, target: Player | None):
         ic, nm = ITEMS[item]
-        self.emit("item", by=self.pidx(p), item=item, to=self.pidx(target) if target else None)
+        extra = {}
+        if item == "beer" and self.idx < len(self.shells):
+            # По правилам все видят, какой патрон выброшен. В хардкоре это показывается
+            # только в анимации (в журнале результат по-прежнему не хранится).
+            extra["live"] = bool(self.shells[self.idx])
+        self.emit("item", by=self.pidx(p), item=item, to=self.pidx(target) if target else None, **extra)
         if item == "glass":
             s = self.shells[self.idx]
             p.known[self.idx] = s
@@ -379,8 +384,11 @@ class Game:
                     self.eliminate(p)
         elif item == "inv":
             self.shells[self.idx] = not self.shells[self.idx]
-            if self.idx in p.known:
-                p.known[self.idx] = not p.known[self.idx]
+            # Применение предмета публично, поэтому все, кто уже подглядывал в этот патрон
+            # (лупа/телефон), знают, что он перевернулся. Раньше обновлялось только у применившего.
+            for q in self.players:
+                if self.idx in q.known:
+                    q.known[self.idx] = not q.known[self.idx]
             self.say(f"🔄 {p.hn} инвертирует текущий патрон")
         elif item == "phone":
             rem = len(self.shells) - self.idx
