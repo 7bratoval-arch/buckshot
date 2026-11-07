@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import base64
 import gzip
 import hashlib
 import hmac
@@ -22,6 +23,7 @@ import os
 import platform
 import random
 import re
+import secrets
 import sqlite3
 import shutil
 import subprocess
@@ -61,6 +63,10 @@ def normalize_bot_pace(value):
     if not math.isfinite(pace):
         return BOT_PACE
     return max(2.8, min(7.5, pace))
+GUEST_LOGIN = os.getenv("GUEST_LOGIN", "1") != "0"   # вход по имени без Telegram (GUEST_LOGIN=0 — выключить)
+GUEST_BASE = 5 * 10**15        # id гостей лежат выше id пользователей Telegram и не пересекаются с ними
+_RANDOM_SECRET = os.urandom(32)
+_GUEST_RATE: dict[str, list] = {}
 ROOM_TTL = 3 * 3600     # стол без действий закрывается через 3 часа
 MAX_ROOMS = 100
 DB_PATH = HERE / "buckshot.sqlite3"
@@ -152,11 +158,12 @@ def new_code() -> str:
             return code
 
 
-def create_room(uid: int, name: str, with_bot: bool = False) -> Room:
+def create_room(uid: int, name: str, with_bot: bool = False, r1items: bool = False) -> Room:
     with LOCK:
         if len(ROOMS) >= MAX_ROOMS:
             raise ValueError("Сервер переполнен, попробуйте позже")
         g = E.Game(0, uid)
+        g.first_round_items = bool(r1items)
         g.add_human(uid, name, ready=True)
         if with_bot:
             g.add_bot()
@@ -178,10 +185,62 @@ def clean_name(n: str) -> str:
     return n or "Игрок"
 
 
+def guest_secret() -> bytes:
+    base = os.getenv("GUEST_SECRET") or TOKEN
+    if base:   # стабильный ключ: гости остаются «своими» после перезапуска сервера
+        return hashlib.sha256(b"buckshot-guest|" + base.encode()).digest()
+    return _RANDOM_SECRET
+
+
+def _guest_sig(payload: str) -> str:
+    return hmac.new(guest_secret(), payload.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def make_guest(name: str) -> dict:
+    """Создаёт гостя для игры без Telegram: личный подписанный токен вместо initData."""
+    name = clean_name(name)
+    uid = GUEST_BASE + secrets.randbelow(10**15)
+    nb = base64.urlsafe_b64encode(name.encode("utf-8")).decode().rstrip("=")
+    payload = f"{uid}.{nb}"
+    return {"token": f"guest:{payload}.{_guest_sig(payload)}", "id": uid, "name": name}
+
+
+def parse_guest(init: str):
+    try:
+        payload, _, sig = init[len("guest:"):].rpartition(".")
+        if not hmac.compare_digest(_guest_sig(payload), sig):
+            return None
+        uid_s, nb = payload.split(".", 1)
+        uid = int(uid_s)
+        if uid < GUEST_BASE:
+            return None
+        name = base64.urlsafe_b64decode(nb + "=" * (-len(nb) % 4)).decode("utf-8")
+        return {"id": uid, "name": clean_name(name)}
+    except Exception:
+        return None
+
+
+def guest_rate_ok(ip: str) -> bool:
+    """Не больше 20 новых гостей за 10 минут с одного адреса."""
+    now = time.time()
+    with LOCK:
+        lst = [t for t in _GUEST_RATE.get(ip, []) if now - t < 600]
+        if len(lst) >= 20:
+            _GUEST_RATE[ip] = lst
+            return False
+        lst.append(now)
+        _GUEST_RATE[ip] = lst
+        if len(_GUEST_RATE) > 2000:
+            _GUEST_RATE.clear()
+        return True
+
+
 def check_init_data(init: str):
     """Возвращает {'id':..., 'name':...} или None."""
     if not init:
         return None
+    if init.startswith("guest:"):
+        return parse_guest(init) if GUEST_LOGIN else None
     if DEV_MODE and init.startswith("dev:"):
         try:
             _, uid, name = init.split(":", 2)
@@ -227,7 +286,10 @@ def view(room: Room, uid: int) -> dict:
         "live0": g.load_live, "blank0": g.load_blank,
         "bel": None if g.hardcore else [g.bel_live, g.bel_blank],
         "sawed": g.sawed, "log": ([line for line in g.log if "стреляет" not in line and "выбрасывает патрон" not in line and "Ствол заряжен:" not in line][-4:] if g.hardcore else g.log[-30:]),
-        "ev": g.events[-30:], "evmax": g.ev_seq,
+        # Снимки состояния нужны только свежим событиям; у остальных их не отправляем (экономия трафика)
+        "ev": [e if (e["id"] > g.ev_seq - 8 or "st" not in e) else {k: v for k, v in e.items() if k != "st"}
+               for e in g.events[-30:]],
+        "evmax": g.ev_seq, "r1items": g.first_round_items,
         "winsNeeded": E.WINS_NEEDED, "maxPlayers": E.MAX_PLAYERS,
         "bot": BOT_USERNAME, "now": time.time(), "spectators": len(room.spectators),
         "winner": -1,
@@ -285,6 +347,12 @@ def do_act(room: Room, user: dict, d: dict) -> dict:
         elif t == "mode":
             host_only("Режим выбирает хозяин стола 👑")
             g.hardcore = bool(d.get("on"))
+            for player in g.players:
+                if not player.bot:
+                    player.ready = False
+        elif t == "items1":
+            host_only("Это настраивает хозяин стола 👑")
+            g.first_round_items = bool(d.get("on"))
             for player in g.players:
                 if not player.bot:
                     player.ready = False
@@ -391,6 +459,7 @@ def do_act(room: Room, user: dict, d: dict) -> dict:
             ng.players.append(np)
         ng.bot_seq = g.bot_seq
         ng.hardcore = g.hardcore
+        ng.first_round_items = g.first_round_items
         # Нумерация событий продолжается: клиент помнит последний id и отбрасывал бы
         # все события новой игры, пока их номера не перерастут старые.
         ng.ev_seq = g.ev_seq
@@ -523,9 +592,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "too big"}, 413)
             body = json.loads(self.rfile.read(n) or b"{}")
             name = urllib.parse.urlparse(self.path).path.rsplit("/", 1)[-1]
+            if name == "guest":
+                if not GUEST_LOGIN:
+                    return self._json({"error": "msg", "msg": "Вход без Telegram отключён на этом сервере"}, 403)
+                ip = (self.headers.get("X-Forwarded-For") or self.client_address[0]).split(",")[0].strip()
+                if not guest_rate_ok(ip):
+                    return self._json({"error": "msg", "msg": "Слишком много входов, попробуйте через несколько минут"}, 429)
+                return self._json(make_guest(str(body.get("name") or "")))
             user = check_init_data(body.get("initData", ""))
             if not user:
-                return self._json({"error": "auth", "msg": "Откройте игру через Telegram"}, 401)
+                return self._json({"error": "auth", "msg": "Войдите заново: откройте игру через Telegram или введите имя"}, 401)
             self._json(self.route(name, user, body))
         except ValueError as e:
             self._json({"error": "msg", "msg": str(e)})
@@ -555,7 +631,7 @@ class Handler(BaseHTTPRequestHandler):
                     break
             return {"matches": out}
         if name == "create":
-            room = create_room(user["id"], user["name"], bool(b.get("bot")))
+            room = create_room(user["id"], user["name"], bool(b.get("bot")), bool(b.get("r1items")))
             return {"room": room.code}
         if name == "join":
             with LOCK:

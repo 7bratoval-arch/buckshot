@@ -448,6 +448,17 @@ input{-webkit-user-select:text;user-select:text}
 /* PHASE 3.7 — item action choreography */
 .item-burst{position:fixed;z-index:90;left:50%;top:43%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;min-width:150px;padding:18px 24px;border:1px solid rgba(190,145,89,.48);border-radius:18px;background:radial-gradient(ellipse at 50% 0,rgba(139,48,34,.5),transparent 70%),linear-gradient(145deg,rgba(35,20,17,.97),rgba(8,5,5,.97));box-shadow:0 18px 60px #000,0 0 34px rgba(193,18,31,.2);animation:item-burst-in .24s ease-out both}
 .item-burst .ib-icon{display:block;font-size:48px;line-height:1.25;filter:drop-shadow(0 0 14px rgba(255,180,100,.4))}
+.gname{width:100%;padding:14px 16px;border-radius:12px;border:1px solid var(--edge2);background:#120a0a;color:var(--bone);font-size:16px;text-align:center;margin-top:6px}
+.shell-reveal{position:fixed;z-index:92;left:50%;top:44%;transform:translate(-50%,-50%);width:min(86vw,360px);padding:22px 20px 20px;text-align:center;pointer-events:none;border-radius:20px;border:2px solid rgba(190,145,89,.6);background:radial-gradient(ellipse at 50% 0,rgba(139,48,34,.5),transparent 70%),linear-gradient(145deg,rgba(35,20,17,.98),rgba(8,5,5,.98));box-shadow:0 22px 70px #000,0 0 44px rgba(193,18,31,.25);animation:item-burst-in .26s ease-out both}
+.shell-reveal.out{animation:item-burst-out .24s ease-in forwards}
+.shell-reveal .sr-who{display:block;color:#d8c9b8;font-size:14px;font-weight:700;letter-spacing:.04em}
+.shell-reveal .sr-shell{display:block;margin:14px auto 10px;width:46px;height:104px;border-radius:10px 10px 6px 6px;position:relative;overflow:hidden;background:linear-gradient(90deg,#8a1118,#e0383d 45%,#7c0d13);box-shadow:0 0 26px rgba(255,59,48,.55)}
+.shell-reveal .sr-shell i{position:absolute;left:0;right:0;bottom:0;height:30%;background:linear-gradient(90deg,#8d6a2c,#e6c06a 45%,#7a5a22)}
+.shell-reveal.blank .sr-shell{background:linear-gradient(90deg,#9a958c,#f1ece2 45%,#8a857c);box-shadow:0 0 26px rgba(240,236,226,.4)}
+.shell-reveal .sr-type{display:block;font-size:clamp(34px,10vw,46px);font-weight:900;letter-spacing:.12em;line-height:1.1}
+.shell-reveal.live .sr-type{color:#ff3b30;text-shadow:0 0 26px rgba(255,59,48,.7)}
+.shell-reveal.blank .sr-type{color:#f4efe6;text-shadow:0 0 22px rgba(240,236,226,.5)}
+.shell-reveal .sr-note{display:block;margin-top:6px;color:#9d8f84;font-size:12px;letter-spacing:.2em;text-transform:uppercase}
 .item-burst .ib-who{display:block;margin-top:6px;color:#d8c9b8;font-size:12px;font-weight:700;letter-spacing:.04em}
 .item-burst .ib-name{display:block;margin-top:7px;color:#e6c18b;font-size:11px;font-weight:900;letter-spacing:.2em;text-transform:uppercase}
 .item-burst .ib-note{display:block;margin-top:5px;color:#d8c9b8;font-size:12px}
@@ -531,7 +542,8 @@ const ORDER = Object.keys(ITEMS);
 /* ───────── связь ───────── */
 function devInit() { const q = new URLSearchParams(location.search), n = q.get("dev");
   return n ? "dev:" + (q.get("devid") || "1") + ":" + n : ""; }
-const INIT = (tg && tg.initData) || devInit();
+let INIT = (tg && tg.initData) || devInit();
+const IS_TG = !!(tg && tg.initData);   // реально открыто из Telegram
 async function api(path, body) {
   // Сервер держит poll до 20 с; если ответа нет дольше — соединение «зависло», пробуем заново.
   const ac = new AbortController(), t = setTimeout(() => ac.abort(), path === "poll" ? 35000 : 20000);
@@ -546,6 +558,8 @@ let S = null, room = null, ver = -1, lastEv = null, token = 0, busy = false;
 let selTarget = null, aimedIndex = null, modalKind = null, itemInspectOnOwnTurn = false, recvAt = 0, lastKey = "";
 let eventPlayback = Promise.resolve();
 let pendingEventBatches = 0, deferredLog = null;
+// D — «экранное» состояние на время анимаций; playFinal — итоговое состояние проигрываемой пачки событий
+let D = null, playFinal = null;
 
 /* ───────── звук и эффекты ───────── */
 let AC = null, muted = localStorage.getItem("bk_mute") === "1";
@@ -554,6 +568,7 @@ let playSpeed = localStorage.getItem("bk_speed") || "slow";
 const lowEnd = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 4) <= 2;
 let cinemaMode = localStorage.getItem("bk_cinema") || (lowEnd ? "reduced" : "full");
 let smoothMotion = localStorage.getItem("bk_motion") !== "0";
+let r1items = localStorage.getItem("bk_r1items") === "1";   // предметы в 1-м раунде для новых столов
 const BOT_PACES = {slow:7.5, normal:4.8, fast:2.8};
 function applyVisualSettings() {
   document.body.dataset.cinema = cinemaMode;
@@ -636,6 +651,15 @@ function itemBurst(e, hold = 1400) {
   const own = Number.isInteger(e.by) ? document.querySelector(`.seat[data-i="${e.by}"]`) : null;
   if (own && own !== target) { own.classList.remove("item-targeted"); void own.offsetWidth; own.classList.add("item-targeted"); setTimeout(()=>own.classList.remove("item-targeted"),800); }
 }
+function shellReveal(e, hold) {
+  // Пиво: всем показываем выброшенный патрон крупно (в хардкоре он нигде больше не виден)
+  const live = !!e.live;
+  const d = document.createElement("div"); d.className = "shell-reveal " + (live ? "live" : "blank");
+  d.setAttribute("role", "status");
+  d.innerHTML = `<span class="sr-who">${nm(e.by)} · 🍺 пиво</span><span class="sr-shell" aria-hidden="true"><i></i></span><span class="sr-type">${live ? "БОЕВОЙ" : "ХОЛОСТОЙ"}</span><span class="sr-note">патрон выброшен</span>`;
+  document.body.appendChild(d); haptic(live ? "heavy" : "light");
+  setTimeout(() => { d.classList.add("out"); setTimeout(() => d.remove(), 260); }, Math.max(900, hold - 260));
+}
 function directorToast(message, duration = 2100) {
   const old = document.querySelector(".director-callout"); if (old) old.remove();
   const el = document.createElement("div"); el.className = "director-callout"; el.textContent = message;
@@ -678,7 +702,7 @@ function aimAtPlayer(index, persistent = false) {
 async function stealFx(e) {
   const victim = document.querySelector(`.seat[data-i="${e.victim}"]`);
   const thief = document.querySelector(`.seat[data-i="${e.by}"]`);
-  if (!victim || !thief) return;
+  if (!victim || !thief) { showSnap(e); return; }
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   victim.classList.add("steal-victim");
   const stamp = document.createElement("span"); stamp.className = "steal-stamp";
@@ -703,6 +727,7 @@ async function stealFx(e) {
   }
   flight.remove(); stamp.remove();
   victim.classList.remove("steal-victim"); thief.classList.remove("steal-thief");
+  showSnap(e);   // предмет окончательно «ушёл» от жертвы
 }
 async function reloadFx(e) {
   const gun = document.querySelector(".gun");
@@ -746,22 +771,27 @@ async function reloadFx(e) {
     snd("load"); await sleep(260);
   }
   document.body.classList.remove("reloading");
+  showSnap(e);   // новые предметы и объявление состава — после анимации зарядки
 }
 async function playEvents(evs) {
+  playFinal = evs.final || S;
   for (const e of evs) {
     if (e.k === "shot") await shotFx(e);
     else if (e.k === "item") {
       const wait = playSpeed === "slow" ? 1800 : playSpeed === "normal" ? 1450 : 1100;
-      // Одно уведомление на предмет. Раньше показывались большая карточка и маленькая плашка
-      // одновременно; карточка исчезала раньше, и плашка «досиживала» паузу.
       const sawMs = e.item === "saw" ? (playSpeed === "slow" ? 1250 : 950) : 0;
-      itemBurst(e, wait + sawMs);
+      // Пиво: крупная карточка с типом выброшенного патрона, она висит дольше остальных.
+      const beerReveal = e.item === "beer" && typeof e.live === "boolean";
+      const extra = beerReveal ? 1300 : 0;
+      // Одно уведомление на предмет (раньше карточка и плашка дублировали друг друга).
+      if (beerReveal) shellReveal(e, wait + extra); else itemBurst(e, wait + sawMs);
       snd(e.item in SND ? e.item : "tick");
+      await sleep(450); showSnap(e);   // эффект предмета (жизни, патрон, наручники) — когда карточка уже на экране
       if (sawMs) { const g=$(".gun"); if(g){g.classList.add("sawing");await sleep(sawMs);g.classList.remove("sawing");g.classList.add("weapon-settle");setTimeout(()=>g.classList.remove("weapon-settle"),650);} }
-      await sleep(wait);
+      await sleep(Math.max(300, wait + extra - 450));
     }
     else if (e.k === "steal") {
-      // Только анимация кражи (подпись, штамп и перелёт значка): отдельные карточка и плашка дублировали её.
+      // Кража идёт раньше применения украденного. Только анимация кражи: отдельные карточки её дублировали.
       await stealFx(e);
     }
     else if (e.k === "reload") {
@@ -769,8 +799,13 @@ async function playEvents(evs) {
       await reloadFx(e);
     }
     else if (e.k === "die") {
+      showSnap(e);
       const wait = playSpeed === "slow" ? 2100 : playSpeed === "normal" ? 1600 : 1200;
       fx(`<span class="em">⚰️</span>${nm(e.who)} больше не встанет`, wait); snd("toll"); haptic("heavy"); await sleep(wait);
+    }
+    else if (e.k === "turn") {
+      // Ход переходит после выстрела (и после смерти, если она была), но до зарядки
+      showSnap(e); await sleep(playSpeed === "slow" ? 450 : 300);
     }
   }
 }
@@ -791,8 +826,8 @@ function muzzleBurst(gun, sawed = false) {
 async function shotFx(e) {
   // Всегда очищаем остатки прошлой подсветки до начала нового выстрела.
   clearAimFx();
-  const card = document.querySelector(`.seat[data-i="${e.to}"]`);
-  const gun = document.querySelector(".gun");
+  let card = document.querySelector(`.seat[data-i="${e.to}"]`);
+  let gun = document.querySelector(".gun");
   const releaseAim = aimAtPlayer(e.to);
   const incoming = e.to === S.me && e.by !== S.me;
   let pov = null;
@@ -804,6 +839,10 @@ async function shotFx(e) {
       document.body.appendChild(pov);
     }
     await sleep(playSpeed === "slow" ? 1450 : playSpeed === "normal" ? 1050 : 750);
+    // Жизни, лента патронов и т.п. меняются только в момент выстрела, а не до него
+    showSnap(e);
+    gun = document.querySelector(".gun"); card = document.querySelector(`.seat[data-i="${e.to}"]`);
+    aimedIndex = null; aimAtPlayer(e.to, true);
     if (e.live) {
       const sawedBlast = !!e.sawed || Number(e.dmg) > 1;
       if (gun) { gun.classList.remove("fire-blank"); gun.classList.add("fire-live", "muzzle-on"); if (sawedBlast) gun.classList.add("sawed-blast"); }
@@ -838,7 +877,7 @@ const RULES_HTML = `<div class="rules"><div class="c big" style="font-size:34px"
 <h4>Цель</h4><p>Остаться последним в живых. Матч идёт до <b>2 побед</b> в раундах.</p>
 <h4>Дробовик</h4><p>Заряжен случайным набором 🔴 боевых и ⚪ холостых патронов. При зарядке объявляют, сколько каких. В Хардкоре порядок и остаток скрыты; в Облегчённом выстрелившие патроны отмечаются на ленте над стволом.</p>
 <h4>Ваш ход</h4><p>Выстрелите в соперника — ход переходит дальше (даже если патрон холостой).<br>Выстрелите в себя: <b>холостой</b> — ходите ещё раз, <b>боевой</b> — теряете жизнь и ход переходит. Боевой = −1 🩸 (с пилой −2). Нет жизней — вы выбыли.</p>
-<h4>Предметы</h4><p>Раунд I — без предметов, II — по 2, дальше по 3 при каждой перезарядке (максимум 8). Нажмите на карточку — увидите описание. Предметы соперников видны всем: нажмите на его карточку.</p>
+<h4>Предметы</h4><p>Раунд I — без предметов (или по 2, если хозяин включил это в настройках стола), II — по 2, дальше по 3 при каждой перезарядке (максимум 8). Нажмите на карточку — увидите описание. Предметы соперников видны всем: нажмите на его карточку.</p>
 ${ORDER.map(k => `<div class="it"><span class="e">${ITEMS[k].e}</span><div><b>${ITEMS[k].n}</b>${ITEMS[k].d}</div></div>`).join("")}
 <h4>Режимы</h4><p><b>Хардкор 💀 (основной режим, включён по умолчанию)</b> — при каждой зарядке всем объявляют начальное количество боевых и холостых. Затем остаток и типы патронов скрыты: считайте самостоятельно. Телефон при 2 патронах и меньше сгорает впустую.<br><b>Облегчённый</b> — оставшиеся патроны и их типы видны на ленте над стволом.</p>
 <h4>Если игрок молчит</h4><p>Через 90 секунд остальные могут выгнать его из раунда кнопкой «⏰».</p>
@@ -890,8 +929,21 @@ function renderNoAuth() {
   APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Только через Telegram</h1>
   <p class="tag">Откройте бота и нажмите кнопку «☠️ Играть» слева от поля ввода.</p></div>`;
 }
+function renderLogin() {
+  const saved = localStorage.getItem("bk_guest_name") || "";
+  APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
+  <p class="tag">Играйте без Telegram: введите имя и садитесь за стол.</p>
+  <div class="col"><input id="gname" class="gname" maxlength="24" placeholder="Ваше имя" autocomplete="nickname" value="${esc(saved)}">
+  <button class="btn primary" data-a="guestgo">☠ Войти в игру</button>
+  <p class="tag">Если у вас есть Telegram — откройте бота и нажмите «☠️ Играть».</p></div></div>`;
+}
+function authFail() {
+  if (IS_TG) return renderNoAuth();
+  localStorage.removeItem("bk_guest"); INIT = "";
+  renderLogin();
+}
 function renderHome() {
-  S = null; room = null; token++; localStorage.removeItem("bk_room");
+  S = null; D = null; room = null; token++; localStorage.removeItem("bk_room");
   APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
   <p class="tag">Сырой подвал. Тусклая лампа.<br>Один дробовик на всех.</p>${gunSvg(false)}
   <div class="col"><button class="btn primary" data-a="create">☠ Накрыть стол</button>
@@ -920,8 +972,10 @@ function renderLobby() {
   const hc = S.hardcore;
   APP.html = `<div class="lobby"><div class="hd"><div class="t ttl">Стол</div><div class="code" data-a="copy">${esc(S.code)}</div></div>
   <button class="btn primary" data-a="invite">📨 Пригласить друзей</button>
+  ${IS_TG ? '<button class="btn ghost" data-a="copyweb">🌐 Ссылка для игры в браузере (без Telegram)</button>' : ""}
   ${rows}
   <div class="seg"><button class="${hc ? "on" : ""}" data-a="mode" data-on="1">Хардкор 💀</button><button class="${hc ? "" : "on"}" data-a="mode" data-on="0">Облегчённый</button></div>
+  <div class="seg"><button class="${S.r1items ? "" : "on"}" data-a="items1" data-on="0">Раунд I: без предметов</button><button class="${S.r1items ? "on" : ""}" data-a="items1" data-on="1">Раунд I: с предметами</button></div>
   <div class="modeinfo">${hc ? "Основной режим: объявляется начальный состав, затем остаток и типы патронов скрыты." : "Облегчённый режим: на ленте видны оставшиеся патроны и их типы."}${imHost ? "" : " <i>(режим выбирает хозяин)</i>"}</div>
   ${mine ? `<button class="btn ${mine.ready ? "ghost" : "primary"}" data-a="ready">${mine.ready ? "✓ Вы готовы · отменить готовность" : "🙋 Я готов"}</button>` : ""}
   <div class="modeinfo">${allReady ? "Все участники готовы. Можно начинать." : "Ожидаем готовности всех игроков."}</div>
@@ -981,7 +1035,7 @@ function dockHtml() {
     S.players.forEach((p, i) => { if (i !== me && p.alive) chips += `<button class="tgb${selTarget === i ? " on" : ""}" data-a="pick" data-i="${i}">🔫 ${esc(p.name)}</button>`; });
     const lab = selTarget === null ? "Выберите цель" : selTarget === me ? "🔫 ВЫСТРЕЛИТЬ В СЕБЯ" : "🔫 ВЫСТРЕЛИТЬ В " + esc(S.players[selTarget].name.toUpperCase());
     return `<div class="dock"><div class="yt">ТВОЙ ХОД</div>${items}<div class="tg">${chips}</div>
-      <button class="btn fire primary" data-a="fire" ${selTarget === null ? "disabled" : ""}>${lab}</button></div>`;
+      <button class="btn fire primary" data-a="fire" ${selTarget === null || pendingEventBatches > 0 ? "disabled" : ""}>${pendingEventBatches > 0 ? "Идёт ход…" : lab}</button></div>`;
   }
   const cur = S.players[S.turn];
   const afk = (!cur.bot) ? `<button class="btn ghost small" id="afkBtn" data-a="afk" style="margin:6px auto 0;display:block"></button>` : "";
@@ -994,7 +1048,9 @@ function renderGame() {
   let cnt = S.hardcore ? `Объявлено при зарядке: 🔴×${S.live0} · ⚪×${S.blank0}` : `Заряжено: 🔴×${S.live0} ⚪×${S.blank0}`;
   const turnOwner = S.players[S.turn];
   const stockAvatar = turnOwner ? (turnOwner.bot ? "♟" : [...(turnOwner.name || "?")].slice(0, 2).join("").toUpperCase()) : "";
-  if (S.bel) cnt += ` → осталось: 🔴×${S.bel[0]} ⚪×${S.bel[1]}`;
+  const charging = !((S.live0 || 0) + (S.blank0 || 0));
+  if (charging) cnt = "Ствол заряжается…";
+  if (S.bel && !charging) cnt += ` → осталось: 🔴×${S.bel[0]} ⚪×${S.bel[1]}`;
   const keepI = $("#items"), sx = keepI ? keepI.scrollLeft : 0, mainEl = $(".main"), sy = mainEl ? mainEl.scrollTop : 0;
   let veil = "";
   const terminalDeferred = pendingEventBatches > 0 && (S.state === "between" || S.state === "over");
@@ -1052,21 +1108,45 @@ function tickAfk() {
   b.textContent = left > 0 ? `⏰ Выгнать молчуна (через ${left} с)` : "⏰ Выгнать молчуна"; b.disabled = left > 0;
 }
 setInterval(tickAfk, 1000);
+/* Экранное состояние. Пока играют анимации, на столе остаётся прежнее состояние, а снимки
+   событий (e.st, их присылает сервер) применяются в нужный момент: жизни и патроны меняются
+   в момент выстрела, смерть — на её анимации, ход переходит после выстрела, предметы появляются
+   после зарядки. Так порядок на экране совпадает с порядком событий. */
+function overlay(base, snap) {
+  const o = Object.assign({}, base);
+  o.state = "play"; o.turn = snap.turn; o.round = snap.round; o.sawed = snap.sawed;
+  o.players = base.players.map((p, i) => Object.assign({}, p, snap.p[i] || {}));
+  if (!base.hardcore && snap.tape) { o.live0 = snap.live0; o.blank0 = snap.blank0; o.bel = snap.bel; o.tape = snap.tape; o.total = snap.total; o.left = snap.left; }
+  return o;
+}
+function preRoundView(final) {
+  // Начало матча или раунда: стол уже виден, но ствол ещё не заряжен и предметов нет
+  const o = Object.assign({}, final);
+  o.state = "play"; o.sawed = false; o.live0 = 0; o.blank0 = 0;
+  if (!final.hardcore) { o.bel = [0, 0]; o.tape = []; o.total = 0; o.left = 0; }
+  o.players = final.players.map(p => Object.assign({}, p, {items: [], cuffed: false, alive: true}));
+  return o;
+}
+function showSnap(e) { if (!e || !e.st || !S) return; D = overlay(playFinal || S, e.st); render(); }
 function render() {
   if (!S) return;
-  if (S.state === "lobby") renderLobby(); else {
-    renderGame();
-    if (S.state === "play" && S.me >= 0 && S.turn === S.me && selTarget !== null && S.players[selTarget]?.alive) aimAtPlayer(selTarget, true);
-  }
+  const real = S;
+  if (D && real.state !== "lobby") S = D;   // рисуем экранное состояние, а не «будущее»
+  try {
+    if (S.state === "lobby") renderLobby(); else {
+      renderGame();
+      if (S.state === "play" && S.me >= 0 && S.turn === S.me && selTarget !== null && S.players[selTarget]?.alive) aimAtPlayer(selTarget, true);
+    }
+  } finally { S = real; }
 }
 
 /* ───────── цикл опроса ───────── */
-function enter(code) { eventPlayback = Promise.resolve(); pendingEventBatches = 0; deferredLog = null; clearAimFx(); document.querySelectorAll(".pov-threat").forEach(x => x.remove()); room = code; localStorage.setItem("bk_room", code); ver = -1; lastEv = null; S = null; selTarget = null; token++; closeModal(); loop(token); }
+function enter(code) { eventPlayback = Promise.resolve(); pendingEventBatches = 0; deferredLog = null; D = null; playFinal = null; clearAimFx(); document.querySelectorAll(".pov-threat").forEach(x => x.remove()); room = code; localStorage.setItem("bk_room", code); ver = -1; lastEv = null; S = null; selTarget = null; token++; closeModal(); loop(token); }
 async function loop(tk) {
   while (tk === token) {
     const r = await api("poll", {room, since: ver, pace: BOT_PACES[playSpeed] || BOT_PACES.slow});
     if (tk !== token) return;
-    if (r.error === "auth") { renderNoAuth(); return; }
+    if (r.error === "auth") { authFail(); return; }
     if (r.error === "net" || r.error) { $("#net").style.display = "block"; await sleep(1500); continue; }
     $("#net").style.display = "none";
     if (r.gone) { toast("Стол закрыт"); renderHome(); return; }
@@ -1086,6 +1166,7 @@ async function onState(st, tk) {
   lastEv = st.evmax;
   if (tk !== token) return;
   const prevTurn = S ? S.turn : -2;
+  const prevS = S;
   S = st; recvAt = Date.now();
   if (S.turn !== prevTurn || (selTarget !== null && !(S.players[selTarget] && S.players[selTarget].alive))) { selTarget = null; clearAimFx(); }
   if (modalKind === "item" && itemInspectOnOwnTurn && !(S.state === "play" && S.me >= 0 && S.turn === S.me)) closeModal();
@@ -1093,16 +1174,20 @@ async function onState(st, tk) {
   // Не показываем новые строки журнала и экран итогов раньше связанных
   // анимаций. Авторитетное S обновляется сразу, очередь влияет только на показ.
   if (evs.length && hadGameState) {
-    if (pendingEventBatches === 0) deferredLog = previousLog;
+    if (pendingEventBatches === 0) {
+      deferredLog = previousLog;
+      // До начала анимации стол остаётся таким, каким был (или пустым при старте раунда)
+      D = (prevS && prevS.state === "play") ? prevS : preRoundView(st);
+    }
     pendingEventBatches++;
-    const batch = evs.slice();
+    const batch = evs.slice(); batch.final = st;
     const playback = eventPlayback.catch(() => {}).then(() => playEvents(batch));
     eventPlayback = playback.catch(() => {}).then(() => {
       pendingEventBatches = Math.max(0, pendingEventBatches - 1);
       if (pendingEventBatches === 0) {
-        deferredLog = null;
+        deferredLog = null; D = null;
         if (tk === token) render();
-      }
+      } else { D = st; if (tk === token) render(); }
     });
   }
   render();
@@ -1180,6 +1265,9 @@ function showSettings() {
     <h4>Темп игры с ботом</h4><div class="settings-line"><span>Скорость</span><button class="btn" data-a="speed">${speedName[playSpeed] || "Медленная"} · изменить</button></div>
     <h4>Визуальные эффекты</h4><div class="settings-line"><span>Кинематографичность</span><button class="btn" data-a="cinema">${cinemaName[cinemaMode] || "Полные"} · изменить</button></div>
     <div class="settings-line"><span>Плавные анимации</span><button class="btn ${smoothMotion ? "primary" : "ghost"}" data-a="motion">${smoothMotion ? "Включены" : "Выключены"}</button></div>
+    <h4>Правила для новых столов</h4><div class="settings-line"><span>Предметы в 1-м раунде</span><button class="btn ${r1items ? "primary" : "ghost"}" data-a="r1items">${r1items ? "Включены" : "Выключены"}</button></div>
+    <p class="dim">Действует, когда вы создаёте стол или играете с ботом. Хозяин может изменить это и в лобби стола.</p>
+    ${!IS_TG && localStorage.getItem("bk_guest") ? `<h4>Игра без Telegram</h4><div class="settings-line"><span>Вы: ${esc(localStorage.getItem("bk_guest_name") || "Гость")}</span><button class="btn ghost" data-a="guestout">Сменить имя</button></div>` : ""}
     <h4>Звук</h4><div class="settings-line"><span>Звуковые эффекты</span><button class="btn ${muted ? "ghost" : "primary"}" data-a="snd">${muted ? "Выключены" : "Включены"}</button></div>
     <div class="settings-line"><span>Фоновая атмосфера</span><button class="btn ${musicOn ? "primary" : "ghost"}" data-a="music">${musicOn ? "Включена" : "Выключена"}</button></div>
     <div class="settings-line"><span>Громкость эффектов</span><button class="btn" data-a="volume">${Math.round(sfxVolume*100)}% · изменить</button></div>
@@ -1188,8 +1276,8 @@ function showSettings() {
 }
 
 const H = {
-  async create() { const r = await api("create", {bot: false}); r.error ? toast(r.msg) : enter(r.room); },
-  async vsbot() { const r = await api("create", {bot: true}); if (r.error) return toast(r.msg); enter(r.room);
+  async create() { const r = await api("create", {bot: false, r1items}); r.error ? toast(r.msg) : enter(r.room); },
+  async vsbot() { const r = await api("create", {bot: true, r1items}); if (r.error) return toast(r.msg); enter(r.room);
     // Ждём первое состояние стола (а не фиксированные 300 мс): иначе на медленной связи
     // первая зарядка проходит без анимации, потому что клиент ещё не знает номер последнего события.
     for (let i = 0; i < 40 && !S; i++) await sleep(100);
@@ -1218,9 +1306,23 @@ const H = {
   invite() {
     const link = inviteLink(), text = "Садись за стол. ☠️ Buckshot Roulette. Код стола: " + S.code;
     const url = "https://t.me/share/url?url=" + encodeURIComponent(link) + "&text=" + encodeURIComponent(text);
-    if (tg && tg.openTelegramLink && S.bot) tg.openTelegramLink(url); else { try { navigator.clipboard.writeText(link); } catch (e) {} toast("Ссылка скопирована: " + link); }
+    if (IS_TG && tg.openTelegramLink && S.bot) tg.openTelegramLink(url);
+    else if (navigator.share) navigator.share({title: "Buckshot Roulette", text, url: link}).catch(() => {});
+    else { try { navigator.clipboard.writeText(link); } catch (e) {} toast("Ссылка скопирована: " + link); }
   },
   mode(d) { act({type: "mode", on: d.on === "1"}); },
+  items1(d) { act({type: "items1", on: d.on === "1"}); },
+  r1items() { r1items = !r1items; localStorage.setItem("bk_r1items", r1items ? "1" : "0"); showSettings(); },
+  async guestgo() {
+    const name = (($("#gname") || {}).value || "").trim();
+    if (name.length < 2) return toast("Введите имя (минимум 2 символа)");
+    const r = await api("guest", {name});
+    if (r.error || !r.token) return toast(r.msg || "Не удалось войти");
+    INIT = r.token; localStorage.setItem("bk_guest", r.token); localStorage.setItem("bk_guest_name", r.name || name);
+    boot();
+  },
+  guestout() { closeModal(); localStorage.removeItem("bk_guest"); localStorage.removeItem("bk_room"); INIT = ""; S = null; D = null; room = null; token++; renderLogin(); },
+  copyweb() { const link = `${location.origin}/?room=${S.code}`; try { navigator.clipboard.writeText(link); toast("Ссылка для браузера скопирована"); } catch (e) { toast(link); } },
   ready() { act({type: "ready"}); },
   async leavewatch() { await act({type: "leave"}); renderHome(); },
   addbot() { act({type: "addbot"}); },
@@ -1258,20 +1360,21 @@ const H = {
   next() { act({type: "next"}); },
   rematch() { act({type: "rematch"}); }
 };
-function inviteLink() { return S && S.bot ? `https://t.me/${S.bot}?start=room_${S.code}` : `${location.origin}/?room=${S.code}`; }
+function inviteLink() { return IS_TG && S && S.bot ? `https://t.me/${S.bot}?start=room_${S.code}` : `${location.origin}/?room=${S.code}`; }
 document.addEventListener("click", e => { const el = e.target.closest("[data-a]"); if (!el) return;
   const f = H[el.dataset.a]; if (f) { ctx(); if (musicOn && !ambientNodes.length) setMusic(true); f(el.dataset); } });
 
 /* ───────── старт ───────── */
 async function boot() {
-  if (!INIT) { renderNoAuth(); return; }
+  if (!INIT) { const g = localStorage.getItem("bk_guest"); if (g) INIT = g; }
+  if (!INIT) { renderLogin(); return; }
   const q = new URLSearchParams(location.search);
   let code = (q.get("room") || (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || "").toUpperCase().replace(/^ROOM_/, "");
   const fromLink = !!code;
   if (!code) code = localStorage.getItem("bk_room") || "";
   if (code) {
     const r = await api("join", {room: code});
-    if (r.error === "auth") { renderNoAuth(); return; }
+    if (r.error === "auth") { authFail(); return; }
     if (!r.error) { enter(r.room); return; }
     localStorage.removeItem("bk_room");
     renderHome(); if (fromLink) toast(r.msg); return;

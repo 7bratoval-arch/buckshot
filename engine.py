@@ -95,17 +95,39 @@ class Game:
         self.bot_seq = 0
         # Хардкор — основной режим по умолчанию для всех новых столов.
         self.hardcore = True
+        # Настройка стола: выдавать предметы уже в первом раунде (по умолчанию — нет)
+        self.first_round_items = False
 
     # ---------- утилиты ----------
     @property
     def cur(self) -> Player:
         return self.players[self.turn]
 
-    def emit(self, kind: str, **kw):
+    def snapshot(self) -> dict:
+        """Публичное состояние стола для показа в момент события (только то, что и так видно всем).
+        Клиент держит на экране прежнее состояние и применяет снимок в нужный момент анимации,
+        поэтому жизни, ход и патроны меняются в правильной очередности, а не раньше выстрела."""
+        s = {
+            "turn": self.turn if self.state == "play" else -1,
+            "round": self.round,
+            "sawed": self.sawed,
+            "p": [{"hp": max(0, p.hp), "max": p.max_hp, "items": list(p.items), "cuffed": p.cuffed,
+                   "alive": p.alive, "wins": p.wins} for p in self.players],
+        }
+        if not self.hardcore:
+            s.update(live0=self.load_live, blank0=self.load_blank, bel=[self.bel_live, self.bel_blank],
+                     tape=list(self.tape), total=len(self.shells), left=len(self.shells) - self.idx)
+        return s
+
+    def emit(self, kind: str, snap: bool = True, **kw) -> dict:
         """Структурированное событие для анимаций в Mini App."""
         self.ev_seq += 1
-        self.events.append({"id": self.ev_seq, "k": kind, **kw})
+        ev = {"id": self.ev_seq, "k": kind, **kw}
+        if snap:
+            ev["st"] = self.snapshot()
+        self.events.append(ev)
         del self.events[:-60]
+        return ev
 
     def pidx(self, p) -> int | None:
         return self.players.index(p) if p in self.players else None
@@ -162,7 +184,9 @@ class Game:
         self.turn_since = time.time()
 
     def items_per_load(self) -> int:
-        return 0 if self.round <= 1 else (2 if self.round == 2 else 3)
+        if self.round <= 1:
+            return 2 if self.first_round_items else 0
+        return 2 if self.round == 2 else 3
 
     def load(self):
         live, blank = random.randint(1, 4), random.randint(1, 4)
@@ -176,12 +200,6 @@ class Game:
         for p in self.players:
             p.known = {}
         self.say(f"🔁 Ствол заряжен: 🔴×{live} боевых, ⚪×{blank} холостых — порядок знает только тьма")
-        # В хардкоре состав объявляется публично в момент зарядки, но не
-        # сохраняется в повторно запрашиваемой ленте событий.
-        if self.hardcore:
-            self.emit("reload")
-        else:
-            self.emit("reload", live=live, blank=blank)
         n = self.items_per_load()
         if n:
             for p in self.alive_players():
@@ -189,6 +207,12 @@ class Game:
                     if len(p.items) < MAX_ITEMS:
                         p.items.append(random.choice(ITEM_ORDER))
             self.say(f"🧰 На стол выложено по {n} предм. каждому")
+        # Событие после раздачи предметов (снимок уже содержит их). В хардкоре состав
+        # объявляется публично в момент зарядки, но не сохраняется в ленте событий.
+        if self.hardcore:
+            self.emit("reload")
+        else:
+            self.emit("reload", live=live, blank=blank)
 
     def _dec(self, live: bool):
         if live:
@@ -214,7 +238,7 @@ class Game:
             w = alive[0]
             w.wins += 1
             self.say(f"🏁 Раунд {roman(self.round)}: выжил {w.hn}")
-            self.emit("round", winner=self.pidx(w))
+            self.emit("round", snap=False, winner=self.pidx(w))
             if w.wins >= WINS_NEEDED:
                 self.state = "over"
                 return True
@@ -225,6 +249,12 @@ class Game:
         return max(self.players, key=lambda p: p.wins) if self.players else None
 
     def advance(self):
+        before = self.turn
+        self._advance()
+        if self.state == "play" and self.turn != before:
+            self.emit("turn", to=self.turn)
+
+    def _advance(self):
         n = len(self.players)
         i = self.turn
         for _ in range(n * 2 + 1):
@@ -289,10 +319,13 @@ class Game:
         self._dec(live)
         saw, self.sawed = self.sawed, False
         dmg = 2 if (saw and live) else 1
+        if live:
+            t.hp -= dmg
+        # Событие — после применения урона: его снимок показывает новые жизни и ленту патронов
+        # ровно в момент выстрела (ход при этом ещё у стрелявшего).
         self.emit("shot", by=self.pidx(p), to=self.pidx(t), live=live, dmg=dmg if live else 0, sawed=saw)
         who = "в себя" if t is p else f"в {t.hn}"
         if live:
-            t.hp -= dmg
             self.say(f"💥 {p.hn} стреляет {who}: 🔴 ГРОМ! −{dmg}🩸" + (" (пила!)" if dmg == 2 else ""))
             if t.hp <= 0:
                 self.eliminate(t)
@@ -331,10 +364,10 @@ class Game:
         p.items.remove("adr")
         victim.items.remove(item)
         self.say(f"💉 {p.hn} колет адреналин и крадёт {ITEMS[item][0]} {ITEMS[item][1]} у {victim.hn}")
-        alert = self._apply(p, item, target)
-        # Событие кражи отправляется после применения эффекта: клиентская
-        # очередь должна показать передачу предмета после самого действия.
+        # Сначала кража (снимок: адреналин потрачен, у жертвы предмета нет), затем применение
+        # украденного. Раньше порядок был обратный: предмет «применялся» до того, как его украли.
         self.emit("steal", by=self.pidx(p), victim=self.pidx(victim), item=item)
+        alert = self._apply(p, item, target)
         self.after_action()
         return alert
 
@@ -344,13 +377,20 @@ class Game:
         self.after_action()
 
     def _apply(self, p: Player, item: str, target: Player | None):
-        ic, nm = ITEMS[item]
         extra = {}
         if item == "beer" and self.idx < len(self.shells):
             # По правилам все видят, какой патрон выброшен. В хардкоре это показывается
             # только в анимации (в журнале результат по-прежнему не хранится).
             extra["live"] = bool(self.shells[self.idx])
-        self.emit("item", by=self.pidx(p), item=item, to=self.pidx(target) if target else None, **extra)
+        # Событие создаётся до эффекта (чтобы возможная смерть шла после него), а снимок
+        # публичного состояния прикладывается уже после эффекта.
+        ev = self.emit("item", snap=False, by=self.pidx(p), item=item,
+                       to=self.pidx(target) if target else None, **extra)
+        alert = self._apply_effect(p, item, target)
+        ev["st"] = self.snapshot()
+        return alert
+
+    def _apply_effect(self, p: Player, item: str, target: Player | None):
         if item == "glass":
             s = self.shells[self.idx]
             p.known[self.idx] = s
