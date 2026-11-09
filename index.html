@@ -461,6 +461,29 @@ input{-webkit-user-select:text;user-select:text}
 .shell-reveal.live .sr-type{color:#ff3b30;text-shadow:0 0 26px rgba(255,59,48,.7)}
 .shell-reveal.blank .sr-type{color:#f4efe6;text-shadow:0 0 22px rgba(240,236,226,.5)}
 .shell-reveal .sr-note{display:block;margin-top:6px;color:#9d8f84;font-size:12px;letter-spacing:.2em;text-transform:uppercase}
+.load-announce{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.8);animation:la-in .22s ease-out both}
+.load-announce.out{animation:la-out .22s ease-in forwards}
+@keyframes la-in{from{opacity:0}}
+@keyframes la-out{to{opacity:0}}
+.la-card{width:min(92vw,390px);padding:22px 18px 18px;text-align:center;border-radius:22px;border:2px solid rgba(190,145,89,.65);background:radial-gradient(ellipse at 50% 0,rgba(139,48,34,.45),transparent 70%),linear-gradient(145deg,#26140f,#0a0606);box-shadow:0 26px 80px #000,0 0 50px rgba(193,18,31,.22)}
+.la-kicker{font-size:13px;letter-spacing:.28em;color:#d8c9b8;font-weight:800}
+.la-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 12px}
+.la-cell{padding:12px 6px 10px;border-radius:14px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08)}
+.la-cell b{display:block;font-size:clamp(64px,22vw,92px);line-height:1;font-weight:900}
+.la-cell span{display:block;margin-top:6px;font-size:13px;letter-spacing:.16em;font-weight:800}
+.la-cell.live b,.la-cell.live span{color:#ff3b30;text-shadow:0 0 24px rgba(255,59,48,.55)}
+.la-cell.blank b,.la-cell.blank span{color:#f4efe6;text-shadow:0 0 20px rgba(240,236,226,.4)}
+.la-shells{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.la-shells .ls{display:block;width:16px;height:40px;border-radius:5px 5px 3px 3px;position:relative;overflow:hidden}
+.la-shells .ls:after{content:"";position:absolute;left:0;right:0;bottom:0;height:30%;background:linear-gradient(90deg,#8d6a2c,#e6c06a 45%,#7a5a22)}
+.la-shells .ls.live{background:linear-gradient(90deg,#8a1118,#e0383d 45%,#7c0d13)}
+.la-shells .ls.blank{background:linear-gradient(90deg,#9a958c,#f1ece2 45%,#8a857c)}
+.la-note{font-size:12.5px;color:#b9a898;line-height:1.4;margin-bottom:12px}
+.la-ok{width:100%;font-size:17px;padding:15px}
+.la-ok:disabled{opacity:.45}
+.la-timer{height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:10px;overflow:hidden}
+.la-timer i{display:block;height:100%;background:#c9a15f;transform-origin:left}
+.la-again{margin-top:6px;font-size:13px;padding:8px 12px}
 .fmt-card{margin:10px 0 2px;padding:12px 14px;border:1px solid var(--edge2);border-radius:12px;background:linear-gradient(145deg,rgba(40,24,21,.9),rgba(14,9,9,.9));text-align:left;display:grid;gap:4px}
 .fmt-card b{font-size:16px;letter-spacing:.04em;color:var(--bone)}
 .fmt-card span{font-size:13px;color:#d8c9b8;line-height:1.35}
@@ -580,9 +603,10 @@ let D = null, playFinal = null;
 let AC = null, muted = localStorage.getItem("bk_mute") === "1";
 let musicOn = localStorage.getItem("bk_music") === "1";
 let playSpeed = localStorage.getItem("bk_speed") || "slow";
-const lowEnd = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 4) <= 2;
-let cinemaMode = localStorage.getItem("bk_cinema") || (lowEnd ? "reduced" : "full");
+let cinemaMode = localStorage.getItem("bk_cinema") || "full";   // «Полные» по умолчанию: ствол, направленный на камеру, виден всем
 let smoothMotion = localStorage.getItem("bk_motion") !== "0";
+// Хардкор: что делать с составом ствола после объявления: off — скрыть, button — кнопка-напоминание, always — строка на экране
+let hintMode = ["off", "button", "always"].includes(localStorage.getItem("bk_hint")) ? localStorage.getItem("bk_hint") : "off";
 const BOT_PACES = {slow:7.5, normal:4.8, fast:2.8};
 function applyVisualSettings() {
   document.body.dataset.cinema = cinemaMode;
@@ -747,6 +771,39 @@ async function stealFx(e) {
   victim.classList.remove("steal-victim"); thief.classList.remove("steal-thief");
   showSnap(e);   // предмет окончательно «ушёл» от жертвы
 }
+function showLoadCard(live, blank, confirm) {
+  // Крупная карточка состава. Для игрока — с кнопкой «Запомнил» (анимации ждут нажатия, но не дольше 20 с),
+  // для зрителей и для повторного показа — закрывается касанием.
+  return new Promise(resolve => {
+    document.querySelectorAll(".load-announce").forEach(x => x.remove());
+    const d = document.createElement("div"); d.className = "load-announce"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "Состав ствола");
+    const shells = '<i class="ls live"></i>'.repeat(live) + '<i class="ls blank"></i>'.repeat(blank);
+    d.innerHTML = `<div class="la-card"><div class="la-kicker">СТВОЛ ЗАРЯЖЕН</div>
+      <div class="la-grid"><div class="la-cell live"><b>${live}</b><span>БОЕВЫХ</span></div><div class="la-cell blank"><b>${blank}</b><span>ХОЛОСТЫХ</span></div></div>
+      <div class="la-shells" aria-hidden="true">${shells}</div>
+      <div class="la-note">Всего ${live + blank}. Порядок патронов в стволе неизвестен.${confirm ? " После нажатия состав будет скрыт." : " Коснитесь, чтобы закрыть."}</div>
+      ${confirm ? '<button class="btn primary la-ok" disabled>✔ Запомнил</button><div class="la-timer"><i></i></div>' : ""}</div>`;
+    document.body.appendChild(d); snd("tick");
+    let done = false;
+    const close = () => { if (done) return; done = true; d.classList.add("out"); setTimeout(() => d.remove(), 220); resolve(); };
+    if (confirm) {
+      const ok = d.querySelector(".la-ok"), bar = d.querySelector(".la-timer i"), maxMs = 20000;
+      setTimeout(() => { ok.disabled = false; }, 900);          // защита от случайного касания в первый момент
+      ok.addEventListener("click", close);
+      if (bar.animate) bar.animate([{transform: "scaleX(1)"}, {transform: "scaleX(0)"}], {duration: maxMs, easing: "linear", fill: "forwards"});
+      setTimeout(close, maxMs);
+    } else { d.addEventListener("click", close); setTimeout(close, 6000); }
+  });
+}
+async function announceLoad(e) {
+  // Хардкор: сколько зарядилось и каких — один раз и крупно, потом состав скрывается
+  const fin = playFinal || S;
+  if (!fin || !S || !fin.hardcore) return;
+  const live = Number(fin.live0) || 0, blank = Number(fin.blank0) || 0;
+  if (live + blank <= 0) return;
+  const me = S.players[S.me];
+  await showLoadCard(live, blank, !!(S.me >= 0 && me && me.alive));
+}
 function gunPort() {
   // Окно для патронов под ствольной коробкой, в экранных координатах (с учётом масштаба SVG)
   const svg = document.querySelector(".gun-weapon .shotgun"); if (!svg) return null;
@@ -850,6 +907,7 @@ async function playEvents(evs) {
     else if (e.k === "reload") {
       // Без текстового callout: остаются только звук и сама анимация зарядки.
       await reloadFx(e);
+      await announceLoad(e);   // хардкор: состав объявляется крупно один раз
     }
     else if (e.k === "die") {
       showSnap(e);
@@ -929,11 +987,11 @@ function reveal(text) {
 const RULES_HTML = `<div class="rules"><div class="c big" style="font-size:34px">☠️</div><h3 class="ttl c">Правила</h3>
 <h4>Цель</h4><p>Остаться последним в живых. У каждого по <b>5 🩸</b>.</p>
 <h4>Форматы</h4><p><b>⚔️ Дуэль</b> — двое игроков (в том числе игра против бота): матч идёт до <b>2 побед</b> в раундах, не больше 3 раундов.<br><b>💀 На выбывание</b> — трое и больше: <b>один раунд</b>, потерявшие все жизни выбывают, побеждает последний уцелевший. Формат выбирается автоматически по числу игроков.</p>
-<h4>Дробовик</h4><p>Заряжен случайным набором 🔴 боевых и ⚪ холостых патронов. При зарядке объявляют, сколько каких. В Хардкоре порядок и остаток скрыты; в Облегчённом выстрелившие патроны отмечаются на ленте над стволом.</p>
+<h4>Дробовик</h4><p>Заряжен случайным набором 🔴 боевых и ⚪ холостых патронов. При зарядке объявляют, сколько каких. В Хардкоре состав объявляется один раз крупно (запомните его и нажмите «Запомнил»), затем состав, порядок и остаток скрыты; в Облегчённом выстрелившие патроны отмечаются на ленте над стволом.</p>
 <h4>Ваш ход</h4><p>Выстрелите в соперника — ход переходит дальше (даже если патрон холостой).<br>Выстрелите в себя: <b>холостой</b> — ходите ещё раз, <b>боевой</b> — теряете жизнь и ход переходит. Боевой = −1 🩸 (с пилой −2). Нет жизней — вы выбыли.</p>
 <h4>Предметы</h4><p>Предметы выдаются сразу: по 3 каждому при первой зарядке раунда и по 2 при каждой следующей перезарядке (максимум 8). Нажмите на карточку — увидите описание. Предметы соперников видны всем: нажмите на его карточку.</p>
 ${ORDER.map(k => `<div class="it"><span class="e">${ITEMS[k].e}</span><div><b>${ITEMS[k].n}</b>${ITEMS[k].d}</div></div>`).join("")}
-<h4>Режимы</h4><p><b>Хардкор 💀 (основной режим, включён по умолчанию)</b> — при каждой зарядке всем объявляют начальное количество боевых и холостых. Затем остаток и типы патронов скрыты: считайте самостоятельно. Телефон при 2 патронах и меньше сгорает впустую.<br><b>Облегчённый</b> — оставшиеся патроны и их типы видны на ленте над стволом.</p>
+<h4>Режимы</h4><p><b>Хардкор 💀 (основной режим, включён по умолчанию)</b> — при каждой зарядке всем один раз крупно объявляют, сколько боевых и холостых, и просят нажать «Запомнил». Затем состав, остаток и типы патронов скрыты: считайте самостоятельно (в настройках можно включить кнопку-напоминание или постоянную строку). Телефон при 2 патронах и меньше сгорает впустую.<br><b>Облегчённый</b> — оставшиеся патроны и их типы видны на ленте над стволом.</p>
 <h4>Если игрок молчит</h4><p>Через 90 секунд остальные могут выгнать его из раунда кнопкой «⏰».</p>
 <button class="btn primary" data-a="close">Закрыть</button></div>`;
 
@@ -1105,11 +1163,14 @@ function renderGame() {
   const visibleLog = deferredLog || S.log;
   const logs = visibleLog.slice(-4).map(l => `<div class="ln">${l}</div>`).join("");
   const wins = S.players.map(p => `<span class="chip">${esc(p.name)} ${p.wins ? "🗡".repeat(p.wins) : "0"}</span>`).join("");
-  let cnt = S.hardcore ? `Объявлено при зарядке: 🔴×${S.live0} · ⚪×${S.blank0}` : `Заряжено: 🔴×${S.live0} ⚪×${S.blank0}`;
+  const loaded = ((S.live0 || 0) + (S.blank0 || 0)) > 0;
+  let cnt;
+  if (!loaded) cnt = "Ствол заряжается…";
+  else if (S.hardcore) cnt = hintMode === "always" ? `Заряжено: 🔴×${S.live0} · ⚪×${S.blank0}` : "🔒 Состав ствола объявляется при зарядке и скрыт";
+  else cnt = `Заряжено: 🔴×${S.live0} ⚪×${S.blank0}`;
   const turnOwner = S.players[S.turn];
   const stockAvatar = turnOwner ? (turnOwner.bot ? "♟" : [...(turnOwner.name || "?")].slice(0, 2).join("").toUpperCase()) : "";
-  const charging = !((S.live0 || 0) + (S.blank0 || 0));
-  if (charging) cnt = "Ствол заряжается…";
+  const charging = !loaded;
   if (S.bel && !charging) cnt += ` → осталось: 🔴×${S.bel[0]} ⚪×${S.bel[1]}`;
   const keepI = $("#items"), sx = keepI ? keepI.scrollLeft : 0, mainEl = $(".main"), sy = mainEl ? mainEl.scrollTop : 0;
   let veil = "";
@@ -1157,7 +1218,7 @@ function renderGame() {
   <div class="main">${ffa ? "" : `<div class="score">${wins}</div>`}<div class="seats">${S.players.map(seatHtml).join("")}</div>
   <section class="gun" aria-label="Игровой стол и дробовик"><div class="scene-kicker"><span></span> ИГРОВОЙ СТОЛ <span></span></div><div class="gun-light"></div><div class="gun-plaque ttl">THE LAST ROUND</div>
   <div class="gun-weapon">${gunSvg(S.sawed, stockAvatar)}${!S.hardcore ? `<div class="shells shells-on-gun" aria-label="Лента оставшихся патронов над стволом">${shellsHtml()}</div>` : ""}</div><div class="gun-caption">${S.sawed ? "ОБРЕЗ · ДВА СТВОЛА" : "ДВУСТВОЛЬНЫЙ ДРОБОВИК"}</div>
-  <div class="gcount">${cnt}${S.hardcore ? "<br>💀 Остаток патронов скрыт" : ""}${S.sawed ? "<br>🪚 Ствол обрезан — боевой выстрел = 2 урона" : ""}</div>
+  <div class="gcount">${cnt}${S.hardcore ? "<br>💀 Остаток патронов скрыт" : ""}${S.hardcore && loaded && hintMode === "button" ? '<br><button class="btn ghost la-again" data-a="showload">📋 Напомнить состав</button>' : ""}${S.sawed ? "<br>🪚 Ствол обрезан — боевой выстрел = 2 урона" : ""}</div>
   </section><div class="log"><div class="loghead"><span>Последние события</span>${S.hardcore ? "" : '<button class="logmore" data-a="history">Вся история</button>'}</div>${logs}</div></div>${dockHtml()}${veil}`;
   const ni = $("#items"); if (ni) ni.scrollLeft = sx; const nm2 = $(".main"); if (nm2) nm2.scrollTop = sy;
   tickAfk();
@@ -1201,7 +1262,7 @@ function render() {
 }
 
 /* ───────── цикл опроса ───────── */
-function enter(code) { eventPlayback = Promise.resolve(); pendingEventBatches = 0; deferredLog = null; D = null; playFinal = null; clearAimFx(); document.querySelectorAll(".pov-threat").forEach(x => x.remove()); room = code; localStorage.setItem("bk_room", code); ver = -1; lastEv = null; S = null; selTarget = null; token++; closeModal(); loop(token); }
+function enter(code) { eventPlayback = Promise.resolve(); pendingEventBatches = 0; deferredLog = null; D = null; playFinal = null; clearAimFx(); document.querySelectorAll(".pov-threat, .load-announce").forEach(x => x.remove()); room = code; localStorage.setItem("bk_room", code); ver = -1; lastEv = null; S = null; selTarget = null; token++; closeModal(); loop(token); }
 async function loop(tk) {
   while (tk === token) {
     const r = await api("poll", {room, since: ver, pace: BOT_PACES[playSpeed] || BOT_PACES.slow});
@@ -1321,8 +1382,11 @@ async function showMatches() {
 function showSettings() {
   const speedName = {slow:"Медленная",normal:"Обычная",fast:"Быстрая"};
   const cinemaName = {full:"Полные",reduced:"Умеренные",minimal:"Минимальные"};
+const hintName = {off:"Скрыт", button:"По кнопке", always:"Всегда на экране"};
   openModal(sheet(`<h3 class="ttl c">Настройки игры</h3>
     <h4>Темп игры с ботом</h4><div class="settings-line"><span>Скорость</span><button class="btn" data-a="speed">${speedName[playSpeed] || "Медленная"} · изменить</button></div>
+    <h4>Хардкор</h4><div class="settings-line"><span>Состав ствола после объявления</span><button class="btn" data-a="hint">${hintName[hintMode]} · изменить</button></div>
+    <p class="dim">«Скрыт» — состав объявляется один раз крупно, потом нигде не показывается. «По кнопке» — под ружьём появляется кнопка «Напомнить состав». «Всегда на экране» — строка с составом остаётся (остаток патронов скрыт в любом случае).</p>
     <h4>Визуальные эффекты</h4><div class="settings-line"><span>Кинематографичность</span><button class="btn" data-a="cinema">${cinemaName[cinemaMode] || "Полные"} · изменить</button></div>
     <div class="settings-line"><span>Плавные анимации</span><button class="btn ${smoothMotion ? "primary" : "ghost"}" data-a="motion">${smoothMotion ? "Включены" : "Выключены"}</button></div>
     ${!IS_TG && localStorage.getItem("bk_guest") ? `<h4>Игра без Telegram</h4><div class="settings-line"><span>Вы: ${esc(localStorage.getItem("bk_guest_name") || "Гость")}</span><button class="btn ghost" data-a="guestout">Сменить имя</button></div>` : ""}
@@ -1354,6 +1418,8 @@ const H = {
     <button class="btn" data-a="home">🏠 В главное меню</button><button class="btn ghost" data-a="close">Закрыть</button>`)); },
   snd() { muted = !muted; localStorage.setItem("bk_mute", muted ? "1" : "0"); if (!muted) snd("click"); showSettings(); },
   speed() { playSpeed = ({slow:"normal",normal:"fast",fast:"slow"})[playSpeed] || "slow"; localStorage.setItem("bk_speed", playSpeed); showSettings(); },
+  hint() { hintMode = ({off: "button", button: "always", always: "off"})[hintMode] || "off"; localStorage.setItem("bk_hint", hintMode); showSettings(); render(); },
+  showload() { if (S && S.hardcore) showLoadCard(Number(S.live0) || 0, Number(S.blank0) || 0, false); },
   cinema() { cinemaMode = ({full:"reduced",reduced:"minimal",minimal:"full"})[cinemaMode] || "full"; localStorage.setItem("bk_cinema", cinemaMode); applyVisualSettings(); showSettings(); },
   motion() { smoothMotion = !smoothMotion; localStorage.setItem("bk_motion", smoothMotion ? "1" : "0"); applyVisualSettings(); showSettings(); },
   music() { setMusic(!musicOn); showSettings(); },
