@@ -48,7 +48,8 @@ def roman(n: int) -> str:
     return ROMAN[n] if n < len(ROMAN) else str(n)
 
 MAX_ITEMS = 8
-WINS_NEEDED = 2
+WINS_NEEDED = 2       # дуэль: до двух побед в раундах (максимум три раунда)
+START_HP = 5          # у всех по 5 жизней в обоих форматах
 AFK_SECONDS = 90
 
 
@@ -95,13 +96,23 @@ class Game:
         self.bot_seq = 0
         # Хардкор — основной режим по умолчанию для всех новых столов.
         self.hardcore = True
-        # Настройка стола: выдавать предметы уже в первом раунде (по умолчанию — нет)
-        self.first_round_items = False
+        # Формат матча фиксируется при старте: «duel» (двое) или «ffa» (трое и больше, на выбывание)
+        self.mode = None
+        self.loads = 0                  # сколько раз заряжали ствол в текущем раунде
 
     # ---------- утилиты ----------
     @property
     def cur(self) -> Player:
         return self.players[self.turn]
+
+    @property
+    def fmt(self) -> str:
+        """Формат матча. Дуэль — двое: раунды до 2 побед (не больше 3 раундов).
+        На выбывание — трое и больше: один раунд, побеждает последний выживший."""
+        return self.mode or ("ffa" if len(self.players) >= 3 else "duel")
+
+    def wins_needed(self) -> int:
+        return WINS_NEEDED if self.fmt == "duel" else 1
 
     def snapshot(self) -> dict:
         """Публичное состояние стола для показа в момент события (только то, что и так видно всем).
@@ -169,26 +180,31 @@ class Game:
 
     # ---------- раунды ----------
     def start_round(self):
+        if self.mode is None:
+            self.mode = self.fmt
         self.round += 1
-        hp = random.randint(2, 4)
+        self.loads = 0
         for p in self.players:
-            p.hp = p.max_hp = hp
+            p.hp = p.max_hp = START_HP
             p.alive = True
             p.items = []
             p.cuffed = False
             p.known = {}
         self.state = "play"
         self.turn = random.randrange(len(self.players))
-        self.say(f"🕯 Раунд {roman(self.round)}: у каждого по {hp}🩸")
+        if self.fmt == "ffa":
+            self.say(f"🕯 На выбывание: у каждого по {START_HP}🩸. На ногах останется только один")
+        else:
+            self.say(f"🕯 Раунд {roman(self.round)}: у каждого по {START_HP}🩸")
         self.load()
         self.turn_since = time.time()
 
     def items_per_load(self) -> int:
-        if self.round <= 1:
-            return 2 if self.first_round_items else 0
-        return 2 if self.round == 2 else 3
+        """Предметы раздаются сразу: по 3 при первой зарядке раунда и по 2 при каждой следующей."""
+        return 3 if self.loads <= 1 else 2
 
     def load(self):
+        self.loads += 1
         live, blank = random.randint(1, 4), random.randint(1, 4)
         self.shells = [True] * live + [False] * blank
         random.shuffle(self.shells)
@@ -237,12 +253,16 @@ class Game:
         if alive:
             w = alive[0]
             w.wins += 1
-            self.say(f"🏁 Раунд {roman(self.round)}: выжил {w.hn}")
+            if self.fmt == "ffa":
+                self.say(f"🏁 Победитель: {w.hn}")
+            else:
+                self.say(f"🏁 Раунд {roman(self.round)}: выжил {w.hn}")
             self.emit("round", snap=False, winner=self.pidx(w))
-            if w.wins >= WINS_NEEDED:
+            if w.wins >= self.wins_needed():
                 self.state = "over"
                 return True
-        self.state = "between"
+        # На выбывание единственный раунд: если никого не осталось, игра всё равно закончена
+        self.state = "over" if self.fmt == "ffa" else "between"
         return True
 
     def winner(self) -> Player | None:

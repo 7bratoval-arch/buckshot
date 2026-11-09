@@ -327,8 +327,11 @@ input{-webkit-user-select:text;user-select:text}
 .gun .shells-on-gun{position:absolute;z-index:4;left:30%;right:3%;bottom:3px;display:flex;align-items:flex-end;justify-content:center;gap:clamp(2px,.9vw,6px);min-height:29px;padding:0;border:0;pointer-events:none;}
 .gun .shells-on-gun .shell{width:clamp(9px,2.7vw,14px);height:clamp(22px,6vw,29px);border-radius:4px 4px 2px 2px;font-size:8px;box-shadow:0 2px 5px #000;opacity:.96;}
 .gun .shells-on-gun .shell::after{height:7px;}
-.gun.reloading .gun-weapon .shotgun,body.reloading .gun .gun-weapon .shotgun{animation:reload-rack .72s ease-in-out both;}
-@keyframes reload-rack{0%,100%{transform:translateY(0) rotate(0)}22%{transform:translateY(2px) rotate(.7deg)}48%{transform:translateY(-2px) rotate(-.5deg)}72%{transform:translateY(1px) rotate(.25deg)}}
+/* Зарядка: ружьё берут в руки (наклон), патроны вгоняются в окно под коробкой, затем цевьё передёргивается */
+.gun-weapon.is-loading{transform:translateY(-3px) rotate(-3deg);transition:transform .22s ease-out}
+.gun-pump{will-change:transform}
+.load-glint{position:fixed;z-index:9;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:radial-gradient(circle,#fff0c4 0,rgba(255,176,80,.75) 38%,transparent 70%);pointer-events:none;opacity:0}
+@media(prefers-reduced-motion:reduce){.load-glint{display:none!important}}
 .reload-shell{position:absolute;z-index:8;width:12px;height:27px;border-radius:4px 4px 2px 2px;border:1px solid #d9b56d;background:linear-gradient(90deg,#7b2522,#c54a37 38%,#5c1718);box-shadow:0 2px 8px #000,0 0 9px rgba(216,145,73,.35);pointer-events:none;}
 .reload-shell::after{content:"";position:absolute;left:-1px;right:-1px;bottom:-1px;height:7px;border-radius:0 0 2px 2px;background:linear-gradient(90deg,#77512b,#e1bd73,#80572f);}
 .reload-shell.blank{background:linear-gradient(90deg,#77716a,#d8d1c5 45%,#77716a);border-color:#d8d0c2;}
@@ -459,6 +462,12 @@ input{-webkit-user-select:text;user-select:text}
 .shell-reveal.live .sr-type{color:#ff3b30;text-shadow:0 0 26px rgba(255,59,48,.7)}
 .shell-reveal.blank .sr-type{color:#f4efe6;text-shadow:0 0 22px rgba(240,236,226,.5)}
 .shell-reveal .sr-note{display:block;margin-top:6px;color:#9d8f84;font-size:12px;letter-spacing:.2em;text-transform:uppercase}
+.fmt-card{margin:10px 0 2px;padding:12px 14px;border:1px solid var(--edge2);border-radius:12px;background:linear-gradient(145deg,rgba(40,24,21,.9),rgba(14,9,9,.9));text-align:left;display:grid;gap:4px}
+.fmt-card b{font-size:16px;letter-spacing:.04em;color:var(--bone)}
+.fmt-card span{font-size:13px;color:#d8c9b8;line-height:1.35}
+.fmt-card small{font-size:11px;color:#9d8879;line-height:1.35}
+.fmt-card.ffa{border-color:rgba(193,18,31,.55);box-shadow:0 0 22px rgba(193,18,31,.12)}
+.seat .pip{width:clamp(12px,3.6vw,18px)}
 .item-burst .ib-who{display:block;margin-top:6px;color:#d8c9b8;font-size:12px;font-weight:700;letter-spacing:.04em}
 .item-burst .ib-name{display:block;margin-top:7px;color:#e6c18b;font-size:11px;font-weight:900;letter-spacing:.2em;text-transform:uppercase}
 .item-burst .ib-note{display:block;margin-top:5px;color:#d8c9b8;font-size:12px}
@@ -568,7 +577,6 @@ let playSpeed = localStorage.getItem("bk_speed") || "slow";
 const lowEnd = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 4) <= 2;
 let cinemaMode = localStorage.getItem("bk_cinema") || (lowEnd ? "reduced" : "full");
 let smoothMotion = localStorage.getItem("bk_motion") !== "0";
-let r1items = localStorage.getItem("bk_r1items") === "1";   // предметы в 1-м раунде для новых столов
 const BOT_PACES = {slow:7.5, normal:4.8, fast:2.8};
 function applyVisualSettings() {
   document.body.dataset.cinema = cinemaMode;
@@ -596,6 +604,10 @@ const SND = {
   cock() { noise(0.045, 2700, 0.42, "highpass"); setTimeout(() => { noise(0.07, 1500, 0.36, "highpass"); tone(420, 0.055, 0.12, "triangle", 260); }, 135); },
   toll() { tone(118, 1.35, 0.32, "triangle", 68); setTimeout(() => tone(78, 0.8, 0.18, "sine", 42), 180); },
   load() { [0,1,2,3].forEach(i => setTimeout(() => { noise(0.045, 1800 + i * 280, 0.38, "highpass"); tone(260 + i*45, .06, .11, "square", 180+i*25); }, i * 105)); },
+  shellin() { noise(0.05, 2300, 0.36, "highpass"); tone(170 + Math.random() * 40, 0.08, 0.2, "square", 95); },
+  rackopen() { noise(0.08, 1400, 0.5, "bandpass"); tone(240, 0.09, 0.22, "square", 130); },
+  rackclose() { noise(0.1, 800, 0.62, "bandpass"); tone(120, 0.13, 0.34, "square", 70); setTimeout(() => noise(0.05, 3200, 0.3, "highpass"), 40); },
+  pump() { SND.rackopen(); setTimeout(() => SND.rackclose(), 240); },
   tick() { noise(0.028, 3000, 0.22, "highpass"); },
   glass() { tone(1450,.22,.22,"sine",980); setTimeout(()=>tone(1900,.18,.14,"sine",1300),90); },
   beer() { tone(420,.12,.22,"triangle",250); noise(.12,850,.2,"lowpass"); },
@@ -729,6 +741,37 @@ async function stealFx(e) {
   victim.classList.remove("steal-victim"); thief.classList.remove("steal-thief");
   showSnap(e);   // предмет окончательно «ушёл» от жертвы
 }
+function gunPort() {
+  // Окно для патронов под ствольной коробкой, в экранных координатах (с учётом масштаба SVG)
+  const svg = document.querySelector(".gun-weapon .shotgun"); if (!svg) return null;
+  const r = svg.getBoundingClientRect(), s = Math.min(r.width / 430, r.height / 116) || 1;
+  return {x: r.left + (r.width - 430 * s) / 2 + 146 * s, y: r.top + (r.height - 116 * s) / 2 + 80 * s, s};
+}
+function kickGun(dx = -4) {
+  // Короткий толчок ружья: патрон «вогнали» или цевьё встало на место
+  const w = document.querySelector(".gun-weapon");
+  if (w && w.animate) w.animate([
+    {transform: "translateY(-3px) rotate(-3deg)"},
+    {transform: `translate(${dx}px,-3px) rotate(-3.7deg)`, offset: .4},
+    {transform: "translateY(-3px) rotate(-3deg)"}], {duration: 130, easing: "ease-out"});
+}
+function loadGlint(g) {
+  const d = document.createElement("span"); d.className = "load-glint"; d.setAttribute("aria-hidden", "true");
+  d.style.left = g.x + "px"; d.style.top = g.y + "px"; document.body.appendChild(d);
+  const a = d.animate ? d.animate([{opacity: 0, transform: "scale(.4)"}, {opacity: 1, transform: "scale(1)", offset: .3}, {opacity: 0, transform: "scale(1.5)"}], {duration: 260, easing: "ease-out", fill: "forwards"}) : null;
+  (a ? a.finished.catch(() => {}) : sleep(260)).then(() => d.remove());
+}
+async function rackPump() {
+  // Передёргивание: цевьё вперёд (затвор открыт, «клац»), затем назад (патрон подан, второй «клац»)
+  const pump = document.querySelector(".gun-pump");
+  const sawedNow = !!((D || S) && (D || S).sawed), travel = sawedNow ? 12 : 30;
+  const dur = playSpeed === "slow" ? 640 : playSpeed === "normal" ? 540 : 440;
+  setTimeout(() => snd("rackopen"), dur * .46); setTimeout(() => snd("rackclose"), dur * .97);
+  if (pump && pump.animate) {
+    await pump.animate([{transform: "translateX(0)"}, {transform: `translateX(${travel}px)`, offset: .46}, {transform: `translateX(${travel}px)`, offset: .54}, {transform: "translateX(0)"}], {duration: dur, easing: "ease-in-out"}).finished.catch(() => {});
+  } else await sleep(dur);
+  kickGun(-5);
+}
 async function reloadFx(e) {
   const gun = document.querySelector(".gun");
   const stage = document.querySelector(".gun-weapon");
@@ -739,36 +782,40 @@ async function reloadFx(e) {
   const total = Math.max(1, Math.min(8, hidden ? ((Number(S.live0)||0) + (Number(S.blank0)||0)) : ((Number(e.live)||0) + (Number(e.blank)||0))));
   document.body.classList.add("reloading");
   if (!reduced) {
-    // Снаряды живут на уровне body, поэтому очередной сетевой render не оборвёт анимацию.
-    const box = stage.getBoundingClientRect();
-    const targetX = box.left + box.width * .385;
-    const targetY = box.top + box.height * .43;
+    // 1) ружьё берут в руки
+    stage.classList.add("is-loading"); await sleep(260);
+    // 2) патроны вгоняются по одному в окно под ствольной коробкой.
+    //    Снаряды живут на уровне body, поэтому сетевой render не оборвёт анимацию.
+    const step = playSpeed === "slow" ? 300 : playSpeed === "normal" ? 240 : 190, dur = 430;
     const jobs = [];
     for (let i = 0; i < total; i++) {
-      const shell = document.createElement("span");
+      const g = gunPort(); if (!g) break;
       const isBlank = !hidden && i >= (Number(e.live)||0);
+      const shell = document.createElement("span");
       shell.className = "reload-shell" + (hidden ? " neutral" : isBlank ? " blank" : "");
       shell.setAttribute("aria-hidden", "true");
-      const startX = box.left + box.width * (.66 + (i % 4) * .055);
-      const startY = box.top + box.height * (.78 + Math.floor(i / 4) * .08);
-      shell.style.position = "fixed";
-      shell.style.left = `${startX}px`; shell.style.top = `${startY}px`;
+      const sw = Math.max(9, 13 * g.s), sh = Math.max(20, 29 * g.s), side = i % 2 ? 1 : -1, dx = side * 8 * g.s;
+      shell.style.cssText = `position:fixed;left:${g.x - sw / 2}px;top:${g.y}px;width:${sw}px;height:${sh}px`;
       document.body.appendChild(shell);
-      const delay = i * 210;
       const anim = shell.animate([
-        {left:`${startX}px`,top:`${startY}px`,opacity:0,transform:"translateY(12px) rotate(90deg) scale(.72)"},
-        {left:`${startX}px`,top:`${startY}px`,opacity:1,offset:.18,transform:"translateY(0) rotate(55deg) scale(1)"},
-        {left:`${targetX}px`,top:`${targetY}px`,opacity:1,offset:.78,transform:"translateY(0) rotate(8deg) scale(.92)"},
-        {left:`${targetX-4}px`,top:`${targetY+2}px`,opacity:0,transform:"translateY(-2px) rotate(0) scale(.55)"}
-      ], {duration:850,delay,easing:"cubic-bezier(.2,.72,.22,1)",fill:"forwards"});
-      jobs.push(anim.finished.catch(()=>{}).then(()=>shell.remove()));
+        {transform: `translate(${dx}px,${64 * g.s}px) rotate(${side * 16}deg)`, opacity: 0, clipPath: "inset(0 0 0 0)"},
+        {transform: `translate(${dx * .35}px,${34 * g.s}px) rotate(${side * 6}deg)`, opacity: 1, offset: .36},
+        {transform: `translate(0,${8 * g.s}px) rotate(0deg)`, opacity: 1, clipPath: "inset(0 0 0 0)", offset: .74},
+        {transform: `translate(0,${-sh * .72}px) rotate(0deg)`, opacity: 1, clipPath: "inset(72% 0 0 0)"}
+      ], {duration: dur, easing: "cubic-bezier(.3,.7,.3,1)", fill: "forwards"});
+      jobs.push(anim.finished.catch(() => {}).then(() => shell.remove()));
+      // момент «вгоняет»: толчок ружья, блик в окне и щелчок
+      setTimeout(() => { snd("shellin"); kickGun(-3); const p = gunPort(); if (p) loadGlint(p); }, dur * .74);
+      await sleep(step);
     }
-    await sleep(220);
-    snd("load");
     await Promise.all(jobs);
-    await sleep(300);
+    await sleep(140);
+    // 3) передёргивание цевья
+    await rackPump();
+    const st2 = document.querySelector(".gun-weapon"); if (st2) st2.classList.remove("is-loading");
+    await sleep(280);
   } else {
-    snd("load"); await sleep(260);
+    snd("pump"); await sleep(320);
   }
   document.body.classList.remove("reloading");
   showSnap(e);   // новые предметы и объявление состава — после анимации зарядки
@@ -874,10 +921,11 @@ function reveal(text) {
     <div class="v">${esc(val.replace(em, "").trim())}</div><button class="btn ghost" data-a="close">Понял</button></div>`, "reveal");
 }
 const RULES_HTML = `<div class="rules"><div class="c big" style="font-size:34px">☠️</div><h3 class="ttl c">Правила</h3>
-<h4>Цель</h4><p>Остаться последним в живых. Матч идёт до <b>2 побед</b> в раундах.</p>
+<h4>Цель</h4><p>Остаться последним в живых. У каждого по <b>5 🩸</b>.</p>
+<h4>Форматы</h4><p><b>⚔️ Дуэль</b> — двое игроков (в том числе игра против бота): матч идёт до <b>2 побед</b> в раундах, не больше 3 раундов.<br><b>💀 На выбывание</b> — трое и больше: <b>один раунд</b>, потерявшие все жизни выбывают, побеждает последний уцелевший. Формат выбирается автоматически по числу игроков.</p>
 <h4>Дробовик</h4><p>Заряжен случайным набором 🔴 боевых и ⚪ холостых патронов. При зарядке объявляют, сколько каких. В Хардкоре порядок и остаток скрыты; в Облегчённом выстрелившие патроны отмечаются на ленте над стволом.</p>
 <h4>Ваш ход</h4><p>Выстрелите в соперника — ход переходит дальше (даже если патрон холостой).<br>Выстрелите в себя: <b>холостой</b> — ходите ещё раз, <b>боевой</b> — теряете жизнь и ход переходит. Боевой = −1 🩸 (с пилой −2). Нет жизней — вы выбыли.</p>
-<h4>Предметы</h4><p>Раунд I — без предметов (или по 2, если хозяин включил это в настройках стола), II — по 2, дальше по 3 при каждой перезарядке (максимум 8). Нажмите на карточку — увидите описание. Предметы соперников видны всем: нажмите на его карточку.</p>
+<h4>Предметы</h4><p>Предметы выдаются сразу: по 3 каждому при первой зарядке раунда и по 2 при каждой следующей перезарядке (максимум 8). Нажмите на карточку — увидите описание. Предметы соперников видны всем: нажмите на его карточку.</p>
 ${ORDER.map(k => `<div class="it"><span class="e">${ITEMS[k].e}</span><div><b>${ITEMS[k].n}</b>${ITEMS[k].d}</div></div>`).join("")}
 <h4>Режимы</h4><p><b>Хардкор 💀 (основной режим, включён по умолчанию)</b> — при каждой зарядке всем объявляют начальное количество боевых и холостых. Затем остаток и типы патронов скрыты: считайте самостоятельно. Телефон при 2 патронах и меньше сгорает впустую.<br><b>Облегчённый</b> — оставшиеся патроны и их типы видны на ленте над стволом.</p>
 <h4>Если игрок молчит</h4><p>Через 90 секунд остальные могут выгнать его из раунда кнопкой «⏰».</p>
@@ -914,10 +962,12 @@ function gunSvg(sawed, stockAvatar = "") {
   <path d="M165 49 L${barrelEnd} 49 L${barrelEnd} 62 L168 62Z" fill="url(#gunSteel)" stroke="#080808" stroke-width="2"/>
   <path d="M174 34 L${barrelEnd-8} 34 M174 52 L${barrelEnd-8} 52" stroke="#d8d0c7" stroke-opacity=".32" stroke-width="2"/>
   <path d="M170 44 L${barrelEnd} 44 M170 62 L${barrelEnd} 62" stroke="#050505" stroke-width="2"/>
-  <!-- цевьё и крепления -->
+  <!-- цевьё и крепления (подвижная часть: при зарядке дробовик передёргивается) -->
+  <g class="gun-pump">
   <path d="M190 43 L${foreEnd} 43 L${foreEnd} 72 Q${foreEnd-3} 79 ${foreEnd-12} 77 L190 66Z" fill="url(#gunWood)" stroke="#160b07" stroke-width="2.5"/>
   <path d="M198 48 L${foreEnd-8} 48" stroke="#d39b60" stroke-opacity=".42" stroke-width="2"/>
   <path d="M208 42 L208 68 M${foreEnd-18} 42 L${foreEnd-18} 70" stroke="#171211" stroke-width="3"/>
+  </g>
   <path d="M170 25 L184 25 L190 31 L170 31Z" fill="#aaa29a" stroke="#171211" stroke-width="1.5"/>
   ${sawed
     ? `<path d="M${barrelEnd-7} 26 L${barrelEnd+2} 31 L${barrelEnd-7} 37 M${barrelEnd-7} 44 L${barrelEnd+2} 49 L${barrelEnd-7} 55 M${barrelEnd-7} 62 L${barrelEnd+2} 67" fill="none" stroke="#d6c8b8" stroke-width="2.4"/><path d="M${barrelEnd+3} 28 L${barrelEnd+3} 70" stroke="#a51b20" stroke-width="2"/>`
@@ -969,13 +1019,16 @@ function renderLobby() {
     rows += `<div class="srow"><div class="av">${p.bot ? "🎭" : esc([...p.name][0] || "?").toUpperCase()}</div>
       <div class="nm">${esc(p.name)}${i === S.me ? ' <small class="dim">(вы)</small>' : ""}</div>${p.id === host ? "<span>👑</span>" : ""}<span class="${p.bot || p.ready ? "ready" : "notready"}">${p.bot ? "БОТ · ГОТОВ" : p.ready ? "ГОТОВ" : "НЕ ГОТОВ"}</span>${tools}</div>`;
   }
-  const hc = S.hardcore;
+  const hc = S.hardcore, ffaFmt = S.players.length >= 3;
+  const fmtCard = ffaFmt
+    ? `<div class="fmt-card ffa"><b>💀 На выбывание</b><span>Один раунд: кто потерял все жизни — выбывает, побеждает последний, кто остался на ногах.</span><small>У всех по ${S.startHp || 5} 🩸, предметы выдаются сразу. Двое игроков — дуэль, трое и больше — на выбывание.</small></div>`
+    : `<div class="fmt-card"><b>⚔️ Дуэль</b><span>Матч до ${S.winsNeeded || 2} побед в раундах (не больше трёх раундов).</span><small>У всех по ${S.startHp || 5} 🩸, предметы выдаются сразу. Двое игроков — дуэль, трое и больше — на выбывание.</small></div>`;
   APP.html = `<div class="lobby"><div class="hd"><div class="t ttl">Стол</div><div class="code" data-a="copy">${esc(S.code)}</div></div>
   <button class="btn primary" data-a="invite">📨 Пригласить друзей</button>
   ${IS_TG ? '<button class="btn ghost" data-a="copyweb">🌐 Ссылка для игры в браузере (без Telegram)</button>' : ""}
   ${rows}
+  ${fmtCard}
   <div class="seg"><button class="${hc ? "on" : ""}" data-a="mode" data-on="1">Хардкор 💀</button><button class="${hc ? "" : "on"}" data-a="mode" data-on="0">Облегчённый</button></div>
-  <div class="seg"><button class="${S.r1items ? "" : "on"}" data-a="items1" data-on="0">Раунд I: без предметов</button><button class="${S.r1items ? "on" : ""}" data-a="items1" data-on="1">Раунд I: с предметами</button></div>
   <div class="modeinfo">${hc ? "Основной режим: объявляется начальный состав, затем остаток и типы патронов скрыты." : "Облегчённый режим: на ленте видны оставшиеся патроны и их типы."}${imHost ? "" : " <i>(режим выбирает хозяин)</i>"}</div>
   ${mine ? `<button class="btn ${mine.ready ? "ghost" : "primary"}" data-a="ready">${mine.ready ? "✓ Вы готовы · отменить готовность" : "🙋 Я готов"}</button>` : ""}
   <div class="modeinfo">${allReady ? "Все участники готовы. Можно начинать." : "Ожидаем готовности всех игроков."}</div>
@@ -987,7 +1040,7 @@ function seatHtml(p, i) {
   const c = ["seat"]; if (S.turn === i) c.push("cur"); if (!p.alive) c.push("dead"); if (selTarget === i) c.push("sel");
   let pips = ""; for (let k = 0; k < p.max; k++) pips += `<i class="pip${k < p.hp ? "" : " off"}"></i>`;
   const its = p.items.map(k => `<span title="${esc(ITEMS[k].n)}">${ITEMS[k].e}</span>`).join("");
-  const bd = (p.cuffed ? '<span class="bd" title="Скован">⛓️</span>' : "") + (S.host === p.id ? '<span class="bd" title="Хозяин стола">👑</span>' : "") + (p.wins ? `<span class="bd" title="Победы">${"🗡".repeat(p.wins)}</span>` : "");
+  const bd = (p.cuffed ? '<span class="bd" title="Скован">⛓️</span>' : "") + (S.host === p.id ? '<span class="bd" title="Хозяин стола">👑</span>' : "") + (p.wins && S.format !== "ffa" ? `<span class="bd" title="Победы">${"🗡".repeat(p.wins)}</span>` : "");
   const avatar = p.bot ? "♟" : esc([...p.name][0] || "?").toUpperCase();
   const canPick = S.state === "play" && S.me >= 0 && S.turn === S.me && p.alive;
   const avatarHtml = `<button type="button" class="seatav pickable" data-a="seat" data-i="${i}" aria-label="Открыть карточку игрока: ${esc(p.name)}" title="Информация об игроке">${avatar}</button>`;
@@ -1042,6 +1095,7 @@ function dockHtml() {
   return `<div class="dock"><div class="wt">${cur.bot ? "🎭" : "🕯"} Ходит <b>${esc(cur.name)}</b>${cur.bot ? " — молча взвешивает дробовик…" : ""}</div>${afk}${items}</div>`;
 }
 function renderGame() {
+  const ffa = S.format === "ffa", aliveN = S.players.filter(p => p.alive).length;
   const visibleLog = deferredLog || S.log;
   const logs = visibleLog.slice(-4).map(l => `<div class="ln">${l}</div>`).join("");
   const wins = S.players.map(p => `<span class="chip">${esc(p.name)} ${p.wins ? "🗡".repeat(p.wins) : "0"}</span>`).join("");
@@ -1073,7 +1127,7 @@ function renderGame() {
       </div></div>`;
   } else if (S.state === "over" && !terminalDeferred) {
     const w = S.players[S.winner];
-    const scoreRows = S.players.map(p => `<span class="result-score${w && p === w ? " champion" : ""}"><b>${esc(p.name)}</b><i>${p.wins || 0} ПОБЕД</i></span>`).join("");
+    const scoreRows = S.players.map(p => `<span class="result-score${w && p === w ? " champion" : ""}"><b>${esc(p.name)}</b><i>${ffa ? (p.alive ? "ПОБЕДИТЕЛЬ" : "ВЫБЫЛ") : `${p.wins || 0} ПОБЕД`}</i></span>`).join("");
     veil = `<div class="veil result-veil final-result" role="dialog" aria-modal="true" aria-label="Итоги матча">
       <div class="result-backlight"></div><div class="result-grain"></div>
       <div class="result-col">
@@ -1083,7 +1137,7 @@ function renderGame() {
         <h2 class="result-title ttl">${w ? "Победитель" : "Игра окончена"}</h2>
         <div class="champion-name">${w ? esc(w.name) : "Нет победителя"}</div>
         <p class="result-sub">${w ? "Подвал признал нового хозяина." : "Никто не покинул подвал победителем."}</p>
-        <div class="result-divider"><span>ИТОГОВЫЙ СЧЁТ</span></div>
+        <div class="result-divider"><span>${ffa ? "ИТОГ" : "ИТОГОВЫЙ СЧЁТ"}</span></div>
         <div class="result-scoreboard">${scoreRows}</div>
         <div class="result-stamp">THE HOUSE REMEMBERS</div>
         ${S.me >= 0 ? '<button class="btn primary result-action" data-a="rematch"><span>🔁</span> Ещё одна ночь <i>→</i></button>' : '<button class="btn primary result-action" data-a="leavewatch">Покинуть наблюдение</button>'}
@@ -1092,9 +1146,9 @@ function renderGame() {
       </div></div>`;
   }
   APP.html = `<div class="top"><button class="ic" data-a="menu">☰</button>
-    <div class="rd ttl">Раунд ${roman(S.round)}${S.hardcore ? '<span class="hc">💀 хардкор</span>' : ""}${S.me < 0 ? ' <span class="spectator-tag">ЗРИТЕЛЬ</span>' : ""}${S.spectators ? ' <span class="spectator-tag">👁 ' + S.spectators + '</span>' : ""}</div>
+    <div class="rd ttl">${ffa ? `На выбывание · ${aliveN}/${S.players.length}` : "Раунд " + roman(S.round)}${S.hardcore ? '<span class="hc">💀 хардкор</span>' : ""}${S.me < 0 ? ' <span class="spectator-tag">ЗРИТЕЛЬ</span>' : ""}${S.spectators ? ' <span class="spectator-tag">👁 ' + S.spectators + '</span>' : ""}</div>
     <button class="ic" data-a="snd">${muted ? "🔇" : "🔊"}</button></div>
-  <div class="main"><div class="score">${wins}</div><div class="seats">${S.players.map(seatHtml).join("")}</div>
+  <div class="main">${ffa ? "" : `<div class="score">${wins}</div>`}<div class="seats">${S.players.map(seatHtml).join("")}</div>
   <section class="gun" aria-label="Игровой стол и дробовик"><div class="scene-kicker"><span></span> ИГРОВОЙ СТОЛ <span></span></div><div class="gun-light"></div><div class="gun-plaque ttl">THE LAST ROUND</div>
   <div class="gun-weapon">${gunSvg(S.sawed, stockAvatar)}${!S.hardcore ? `<div class="shells shells-on-gun" aria-label="Лента оставшихся патронов над стволом">${shellsHtml()}</div>` : ""}</div><div class="gun-caption">${S.sawed ? "ОБРЕЗ · ДВА СТВОЛА" : "ДВУСТВОЛЬНЫЙ ДРОБОВИК"}</div>
   <div class="gcount">${cnt}${S.hardcore ? "<br>💀 Остаток патронов скрыт" : ""}${S.sawed ? "<br>🪚 Ствол обрезан — боевой выстрел = 2 урона" : ""}</div>
@@ -1265,8 +1319,6 @@ function showSettings() {
     <h4>Темп игры с ботом</h4><div class="settings-line"><span>Скорость</span><button class="btn" data-a="speed">${speedName[playSpeed] || "Медленная"} · изменить</button></div>
     <h4>Визуальные эффекты</h4><div class="settings-line"><span>Кинематографичность</span><button class="btn" data-a="cinema">${cinemaName[cinemaMode] || "Полные"} · изменить</button></div>
     <div class="settings-line"><span>Плавные анимации</span><button class="btn ${smoothMotion ? "primary" : "ghost"}" data-a="motion">${smoothMotion ? "Включены" : "Выключены"}</button></div>
-    <h4>Правила для новых столов</h4><div class="settings-line"><span>Предметы в 1-м раунде</span><button class="btn ${r1items ? "primary" : "ghost"}" data-a="r1items">${r1items ? "Включены" : "Выключены"}</button></div>
-    <p class="dim">Действует, когда вы создаёте стол или играете с ботом. Хозяин может изменить это и в лобби стола.</p>
     ${!IS_TG && localStorage.getItem("bk_guest") ? `<h4>Игра без Telegram</h4><div class="settings-line"><span>Вы: ${esc(localStorage.getItem("bk_guest_name") || "Гость")}</span><button class="btn ghost" data-a="guestout">Сменить имя</button></div>` : ""}
     <h4>Звук</h4><div class="settings-line"><span>Звуковые эффекты</span><button class="btn ${muted ? "ghost" : "primary"}" data-a="snd">${muted ? "Выключены" : "Включены"}</button></div>
     <div class="settings-line"><span>Фоновая атмосфера</span><button class="btn ${musicOn ? "primary" : "ghost"}" data-a="music">${musicOn ? "Включена" : "Выключена"}</button></div>
@@ -1276,8 +1328,8 @@ function showSettings() {
 }
 
 const H = {
-  async create() { const r = await api("create", {bot: false, r1items}); r.error ? toast(r.msg) : enter(r.room); },
-  async vsbot() { const r = await api("create", {bot: true, r1items}); if (r.error) return toast(r.msg); enter(r.room);
+  async create() { const r = await api("create", {bot: false}); r.error ? toast(r.msg) : enter(r.room); },
+  async vsbot() { const r = await api("create", {bot: true}); if (r.error) return toast(r.msg); enter(r.room);
     // Ждём первое состояние стола (а не фиксированные 300 мс): иначе на медленной связи
     // первая зарядка проходит без анимации, потому что клиент ещё не знает номер последнего события.
     for (let i = 0; i < 40 && !S; i++) await sleep(100);
@@ -1311,8 +1363,6 @@ const H = {
     else { try { navigator.clipboard.writeText(link); } catch (e) {} toast("Ссылка скопирована: " + link); }
   },
   mode(d) { act({type: "mode", on: d.on === "1"}); },
-  items1(d) { act({type: "items1", on: d.on === "1"}); },
-  r1items() { r1items = !r1items; localStorage.setItem("bk_r1items", r1items ? "1" : "0"); showSettings(); },
   async guestgo() {
     const name = (($("#gname") || {}).value || "").trim();
     if (name.length < 2) return toast("Введите имя (минимум 2 символа)");
