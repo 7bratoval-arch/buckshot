@@ -295,8 +295,13 @@ def view(room: Room, uid: int) -> dict:
         "items": {k: [E.ITEMS[k][0], E.ITEMS[k][1], E.DESC[k]] for k in E.ITEM_ORDER},
     }
     if not g.hardcore:
+        mp = g.players[me] if me >= 0 else None
         d.update({"tape": g.tape, "total": len(g.shells),
-                  "left": len(g.shells) - g.idx if playing else 0})
+                  "left": len(g.shells) - g.idx if playing else 0,
+                  # публично: какие патроны переворачивали; лично: насколько игрок уверен в остатке
+                  "invMarks": {str(k): v for k, v in g.inv_marks.items()},
+                  "invAdj": mp.inv_adj if mp else 0,
+                  "invUnc": mp.inv_unc if mp else g.inv_total})
     if g.state == "over":
         w = g.winner()
         d["winner"] = g.players.index(w) if w else -1

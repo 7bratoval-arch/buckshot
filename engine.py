@@ -67,6 +67,8 @@ class Player:
     wins: int = 0
     known: dict = field(default_factory=dict)  # абс. позиция патрона -> боевой?
     ready: bool = False
+    inv_unc: int = 0   # сколько инверсий этот игрок не может «расшифровать» (исход ему неизвестен)
+    inv_adj: int = 0   # точная поправка к числу боевых от инверсий, исход которых он знал (лупа/телефон)
 
     @property
     def hn(self) -> str:
@@ -99,6 +101,8 @@ class Game:
         # Формат матча фиксируется при старте: «duel» (двое) или «ffa» (трое и больше, на выбывание)
         self.mode = None
         self.loads = 0                  # сколько раз заряжали ствол в текущем раунде
+        self.inv_marks: dict[int, int] = {}   # абс. позиция -> сколько раз патрон переворачивали (публично)
+        self.inv_total = 0                    # всего инверсий в текущей зарядке (для зрителей)
 
     # ---------- утилиты ----------
     @property
@@ -110,6 +114,19 @@ class Game:
         """Формат матча. Дуэль — двое: раунды до 2 побед (не больше 3 раундов).
         На выбывание — трое и больше: один раунд, побеждает последний выживший."""
         return self.mode or ("ffa" if len(self.players) >= 3 else "duel")
+
+    def belief(self, p: "Player | None" = None) -> dict:
+        """Что игрок вправе знать об остатке патронов в стволе.
+        Остаток = объявленный состав − выстрелянное (типы известны по ленте). Инвертор меняет состав на ±1, а исход
+        знает только тот, кто видел патрон (лупа/телефон): ему состав известен точно. Остальные знают, что
+        боевых может быть base±1, ±2… (с шагом 2), поэтому показываем набор возможных значений."""
+        rem = max(0, len(self.shells) - self.idx)
+        base = self.load_live - sum(1 for t in self.tape if t) + (p.inv_adj if p else 0)
+        n = p.inv_unc if p else self.inv_total
+        live = sorted({base + d for d in range(-n, n + 1, 2) if 0 <= base + d <= rem})
+        if not live:
+            live = [min(rem, max(0, base))]
+        return {"rem": rem, "live": live, "blank": sorted(rem - v for v in live)}
 
     def wins_needed(self) -> int:
         return WINS_NEEDED if self.fmt == "duel" else 1
@@ -127,7 +144,8 @@ class Game:
         }
         if not self.hardcore:
             s.update(live0=self.load_live, blank0=self.load_blank, bel=[self.bel_live, self.bel_blank],
-                     tape=list(self.tape), total=len(self.shells), left=len(self.shells) - self.idx)
+                     tape=list(self.tape), total=len(self.shells), left=len(self.shells) - self.idx,
+                     inv=dict(self.inv_marks))
         return s
 
     def emit(self, kind: str, snap: bool = True, **kw) -> dict:
@@ -210,6 +228,9 @@ class Game:
         random.shuffle(self.shells)
         self.idx = 0
         self.tape = []
+        self.inv_marks, self.inv_total = {}, 0
+        for q in self.players:
+            q.inv_unc = q.inv_adj = 0
         self.load_live, self.load_blank = live, blank
         self.bel_live, self.bel_blank = live, blank
         self.sawed = False
@@ -443,12 +464,18 @@ class Game:
                 if p.hp <= 0:
                     self.eliminate(p)
         elif item == "inv":
-            self.shells[self.idx] = not self.shells[self.idx]
-            # Применение предмета публично, поэтому все, кто уже подглядывал в этот патрон
-            # (лупа/телефон), знают, что он перевернулся. Раньше обновлялось только у применившего.
+            # Применение публично, но исход знает только тот, кто видел патрон (лупа/телефон): его знание
+            # переворачивается и оценка остатка сдвигается точно. Остальные лишь узнают, что состав мог измениться.
+            pre = self.shells[self.idx]
             for q in self.players:
                 if self.idx in q.known:
-                    q.known[self.idx] = not q.known[self.idx]
+                    q.inv_adj += -1 if pre else 1
+                    q.known[self.idx] = not pre
+                else:
+                    q.inv_unc += 1
+            self.shells[self.idx] = not pre
+            self.inv_total += 1
+            self.inv_marks[self.idx] = self.inv_marks.get(self.idx, 0) + 1
             self.say(f"🔄 {p.hn} инвертирует текущий патрон")
         elif item == "phone":
             rem = len(self.shells) - self.idx

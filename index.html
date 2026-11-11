@@ -461,6 +461,9 @@ input{-webkit-user-select:text;user-select:text}
 .shell-reveal.live .sr-type{color:#ff3b30;text-shadow:0 0 26px rgba(255,59,48,.7)}
 .shell-reveal.blank .sr-type{color:#f4efe6;text-shadow:0 0 22px rgba(240,236,226,.5)}
 .shell-reveal .sr-note{display:block;margin-top:6px;color:#9d8f84;font-size:12px;letter-spacing:.2em;text-transform:uppercase}
+.blackout{position:fixed;inset:0;z-index:400;background:#000}
+.blackout.red{background:radial-gradient(ellipse at 50% 45%,#e0121f 0,#8f0a12 55%,#3a0206 100%)}
+.blackout.lift{opacity:0;transition:opacity .85s ease-out}
 .load-announce{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.8);animation:la-in .22s ease-out both}
 .load-announce.out{animation:la-out .22s ease-in forwards}
 @keyframes la-in{from{opacity:0}}
@@ -497,6 +500,7 @@ input{-webkit-user-select:text;user-select:text}
 .seat .its{flex-wrap:nowrap;overflow:hidden}
 .seat .its.many{gap:2px;font-size:12px}
 .seat .its.many span{flex:1 1 0;min-width:0;max-width:21px;height:18px;padding:0 1px}
+.shell .inv{position:absolute;right:-6px;bottom:-9px;font-size:11px;line-height:1;font-weight:400;filter:drop-shadow(0 1px 2px #000);pointer-events:none}
 .item-burst .ib-who{display:block;margin-top:6px;color:#d8c9b8;font-size:12px;font-weight:700;letter-spacing:.04em}
 .item-burst .ib-name{display:block;margin-top:7px;color:#e6c18b;font-size:11px;font-weight:900;letter-spacing:.2em;text-transform:uppercase}
 .item-burst .ib-note{display:block;margin-top:5px;color:#d8c9b8;font-size:12px}
@@ -605,6 +609,7 @@ let musicOn = localStorage.getItem("bk_music") === "1";
 let playSpeed = localStorage.getItem("bk_speed") || "slow";
 let cinemaMode = localStorage.getItem("bk_cinema") || "full";   // «Полные» по умолчанию: ствол, направленный на камеру, виден всем
 let smoothMotion = localStorage.getItem("bk_motion") !== "0";
+let blackoutOn = localStorage.getItem("bk_blackout") !== "0";   // затемнение при смерти от выстрела
 // Хардкор: что делать с составом ствола после объявления: off — скрыть, button — кнопка-напоминание, always — строка на экране
 let hintMode = ["off", "button", "always"].includes(localStorage.getItem("bk_hint")) ? localStorage.getItem("bk_hint") : "off";
 const BOT_PACES = {slow:7.5, normal:4.8, fast:2.8};
@@ -617,16 +622,27 @@ let sfxVolume = Math.max(0.2, Math.min(1, Number(localStorage.getItem("bk_sfx_vo
 let ambientNodes = [], ambientGain = null;
 function ctx() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
   if (AC && AC.state === "suspended") AC.resume(); return AC; }
+let masterGain = null;
+function master(c) { if (!masterGain || masterGain.context !== c) { masterGain = c.createGain(); masterGain.gain.value = 1; masterGain.connect(c.destination); } return masterGain; }
+function cutAudio() {
+  // Мгновенно оборвать весь звук (эффект и фон): ~12 мс, чтобы не было щелчка
+  const c = AC; if (!c || !masterGain) return; const t = c.currentTime, g = masterGain.gain;
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0, t + 0.012);
+}
+function restoreAudio(ms = 450) {
+  const c = AC; if (!c || !masterGain) return; const t = c.currentTime, g = masterGain.gain;
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(1, t + Math.max(0.01, ms / 1000));
+}
 function noise(dur, fq, vol, type) { const c = ctx(); if (!c || muted) return;
   const n = Math.floor(c.sampleRate * dur), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
   const s = c.createBufferSource(); s.buffer = b; const f = c.createBiquadFilter(); f.type = type || "lowpass";
-  f.frequency.value = fq; const g = c.createGain(); g.gain.value = vol * sfxVolume; s.connect(f); f.connect(g); g.connect(c.destination); s.start(); }
+  f.frequency.value = fq; const g = c.createGain(); g.gain.value = vol * sfxVolume; s.connect(f); f.connect(g); g.connect(master(c)); s.start(); }
 function tone(fq, dur, vol, type, to) { const c = ctx(); if (!c || muted) return;
   const o = c.createOscillator(), g = c.createGain(); o.type = type || "sine"; o.frequency.value = fq;
   if (to) o.frequency.exponentialRampToValueAtTime(to, c.currentTime + dur);
   g.gain.setValueAtTime(vol * sfxVolume, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-  o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur); }
+  o.connect(g); g.connect(master(c)); o.start(); o.stop(c.currentTime + dur); }
 const SND = {
   boom() { noise(0.72, 520, 1.05); tone(82, 0.52, 0.85, "sine", 25); setTimeout(() => noise(0.16, 900, 0.22), 65); },
   sawboom() { noise(.92, 720, 1.28, "lowpass"); tone(68, .72, 1.0, "sine", 19); tone(165, .2, .42, "sawtooth", 48); setTimeout(() => noise(.28, 1250, .34), 55); setTimeout(() => tone(48, .34, .32, "sine", 25), 90); },
@@ -661,7 +677,7 @@ function setMusic(on) {
   if (ambientNodes.length) return;
   ambientGain = c.createGain(); ambientGain.gain.value = 0.018;
   const filter = c.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 180;
-  ambientGain.connect(filter); filter.connect(c.destination);
+  ambientGain.connect(filter); filter.connect(master(c));
   [55, 82.4, 110].forEach((hz, i) => { const o = c.createOscillator(); const g = c.createGain();
     o.type = i === 1 ? "triangle" : "sine"; o.frequency.value = hz; g.gain.value = i === 0 ? 0.5 : 0.18;
     o.connect(g); g.connect(ambientGain); o.start(); ambientNodes.push(o); });
@@ -770,6 +786,59 @@ async function stealFx(e) {
   flight.remove(); stamp.remove();
   victim.classList.remove("steal-victim"); thief.classList.remove("steal-thief");
   showSnap(e);   // предмет окончательно «ушёл» от жертвы
+}
+// Сердцебиение в темноте: [секунда от начала, сила]. «Лаб-даб», замедляется и затихает.
+const DEATH_BEATS = [[0.30, 0.55], [0.52, 0.38], [1.15, 0.42], [1.40, 0.28], [2.05, 0.20]];
+function deathAudio(ms) {
+  // Звон в ушах и глухое сердцебиение. Идут мимо мастера громкости (он на нуле), поэтому слышны в тишине.
+  if (muted) return; const c = ctx(); if (!c) return;
+  const t0 = c.currentTime + 0.03, T = ms / 1000;
+  try {
+    const ring = c.createGain(); ring.gain.setValueAtTime(0.0001, t0);
+    ring.gain.linearRampToValueAtTime(0.05, t0 + 0.12); ring.gain.exponentialRampToValueAtTime(0.0006, t0 + T * 0.9);
+    ring.connect(c.destination);
+    [3920, 3985].forEach(f => { const o = c.createOscillator(); o.type = "sine"; o.frequency.value = f; o.connect(ring); o.start(t0); o.stop(t0 + T); });
+    DEATH_BEATS.forEach(([at, v]) => {
+      if (at > T - 0.25) return;
+      const tb = t0 + at, lp = c.createBiquadFilter(), g = c.createGain();
+      lp.type = "lowpass"; lp.frequency.value = 260;
+      g.gain.setValueAtTime(0.0001, tb); g.gain.linearRampToValueAtTime(v * 0.75, tb + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, tb + 0.22);
+      lp.connect(g); g.connect(c.destination);
+      [[64, 34, 1], [128, 70, 0.45]].forEach(([f0, f1, k]) => {   // вторая гармоника: слышно и на маленьком динамике
+        const o = c.createOscillator(), og = c.createGain(); o.type = "sine"; og.gain.value = k;
+        o.frequency.setValueAtTime(f0, tb); o.frequency.exponentialRampToValueAtTime(f1, tb + 0.16);
+        o.connect(og); og.connect(lp); o.start(tb); o.stop(tb + 0.24);
+      });
+    });
+  } catch (e) {}
+}
+function deathHaptics(ms) {
+  // Удар в момент обрыва и пульс в такт сердцебиению
+  const T = ms / 1000, beats = DEATH_BEATS.filter(([at]) => at < T - 0.25);
+  haptic("heavy");
+  try {
+    if (navigator.vibrate) {
+      const pat = [140]; let prev = 0.14;
+      beats.forEach(([at, v]) => { const dur = v > 0.35 ? 45 : 30; pat.push(Math.max(10, Math.round((at - prev) * 1000)), dur); prev = at + dur / 1000; });
+      navigator.vibrate(pat);
+    }
+  } catch (e) {}
+  beats.forEach(([at, v]) => setTimeout(() => haptic(v > 0.35 ? "heavy" : "light"), at * 1000));
+}
+async function blackout() {
+  // Ваша смерть от выстрела: красная вспышка, звук обрывается, экран чёрный. Во тьме звон в ушах и затихающий пульс.
+  // Затем свет и звук плавно возвращаются. Эффект видит только погибший игрок.
+  document.querySelectorAll(".blackout").forEach(x => x.remove());
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const hold = calm ? 800 : playSpeed === "slow" ? 2500 : playSpeed === "normal" ? 2200 : 1900;
+  const d = document.createElement("div"); d.className = "blackout" + (calm ? "" : " red"); d.setAttribute("aria-hidden", "true");
+  document.body.appendChild(d); cutAudio();
+  if (!calm) setTimeout(() => d.classList.remove("red"), 85);          // доля секунды красного, затем чернота
+  deathAudio(hold); deathHaptics(hold);
+  await sleep(hold);
+  restoreAudio(450); d.classList.add("lift");
+  await sleep(calm ? 200 : 880);
+  d.remove();
 }
 function showLoadCard(live, blank, confirm) {
   // Крупная карточка состава. Для игрока — с кнопкой «Запомнил» (анимации ждут нажатия, но не дольше 20 с),
@@ -960,6 +1029,11 @@ async function shotFx(e) {
       muzzleBurst(gun, sawedBlast); ejectCasing(gun, sawedBlast); flash(sawedBlast); shake(sawedBlast); snd(sawedBlast ? "sawboom" : "boom"); haptic("heavy");
       if (pov) { pov.classList.add("pov-blast"); setTimeout(() => { if (pov && pov.isConnected) pov.remove(); }, 720); }
       if (card) { card.classList.remove("impact", "near-miss"); void card.offsetWidth; card.classList.add("impact"); floatAt(card, "−" + e.dmg); }
+      // Летальный выстрел В ВАС (по снимку: жизней не осталось): он успевает прозвучать лишь мгновение,
+      // звук обрывается, всё гаснет, потом экран возвращается и показывается сама смерть.
+      // Остальные игроки и наблюдатели этого эффекта не видят: для них выстрел проходит обычно.
+      const fatal = blackoutOn && e.to === S.me && !!(e.st && e.st.p && e.st.p[e.to] && e.st.p[e.to].hp <= 0);
+      if (fatal) { await sleep(sawedBlast ? 150 : 120); await blackout(); return; }
       fx(sawedBlast ? "БАХ-БАХ!" : "БАХ!", sawedBlast ? 1450 : 1200, sawedBlast ? "saw-boom" : "boom"); await sleep(playSpeed === "slow" ? (sawedBlast ? 1550 : 1250) : playSpeed === "normal" ? (sawedBlast ? 1200 : 950) : (sawedBlast ? 850 : 650));
     } else {
       if (gun) { gun.classList.remove("fire-live", "muzzle-on"); gun.classList.add("fire-blank"); }
@@ -991,7 +1065,7 @@ const RULES_HTML = `<div class="rules"><div class="c big" style="font-size:34px"
 <h4>Ваш ход</h4><p>Выстрелите в соперника — ход переходит дальше (даже если патрон холостой).<br>Выстрелите в себя: <b>холостой</b> — ходите ещё раз, <b>боевой</b> — теряете жизнь и ход переходит. Боевой = −1 🩸 (с пилой −2). Нет жизней — вы выбыли.</p>
 <h4>Предметы</h4><p>Предметы выдаются сразу: по 3 каждому при первой зарядке раунда и по 2 при каждой следующей перезарядке (максимум 8). Нажмите на карточку — увидите описание. Предметы соперников видны всем: нажмите на его карточку.</p>
 ${ORDER.map(k => `<div class="it"><span class="e">${ITEMS[k].e}</span><div><b>${ITEMS[k].n}</b>${ITEMS[k].d}</div></div>`).join("")}
-<h4>Режимы</h4><p><b>Хардкор 💀 (основной режим, включён по умолчанию)</b> — при каждой зарядке всем один раз крупно объявляют, сколько боевых и холостых, и просят нажать «Запомнил». Затем состав, остаток и типы патронов скрыты: считайте самостоятельно (в настройках можно включить кнопку-напоминание или постоянную строку). Телефон при 2 патронах и меньше сгорает впустую.<br><b>Облегчённый</b> — оставшиеся патроны и их типы видны на ленте над стволом.</p>
+<h4>Режимы</h4><p><b>Хардкор 💀 (основной режим, включён по умолчанию)</b> — при каждой зарядке всем один раз крупно объявляют, сколько боевых и холостых, и просят нажать «Запомнил». Затем состав, остаток и типы патронов скрыты: считайте самостоятельно (в настройках можно включить кнопку-напоминание или постоянную строку). Телефон при 2 патронах и меньше сгорает впустую.<br><b>Облегчённый</b> — над стволом лента: выстрелянные патроны видны по типам, под ней остаток боевых и холостых. Если кто-то применил инвертор, точный исход знает только тот, кто видел патрон; остальным показываются возможные значения (⚠), а на ленте появляется метка 🔄.</p>
 <h4>Если игрок молчит</h4><p>Через 90 секунд остальные могут выгнать его из раунда кнопкой «⏰».</p>
 <button class="btn primary" data-a="close">Закрыть</button></div>`;
 
@@ -1093,7 +1167,7 @@ function renderLobby() {
   ${rows}
   ${fmtCard}
   <div class="seg"><button class="${hc ? "on" : ""}" data-a="mode" data-on="1">Хардкор 💀</button><button class="${hc ? "" : "on"}" data-a="mode" data-on="0">Облегчённый</button></div>
-  <div class="modeinfo">${hc ? "Основной режим: объявляется начальный состав, затем остаток и типы патронов скрыты." : "Облегчённый режим: на ленте видны оставшиеся патроны и их типы."}${imHost ? "" : " <i>(режим выбирает хозяин)</i>"}</div>
+  <div class="modeinfo">${hc ? "Основной режим: объявляется начальный состав, затем остаток и типы патронов скрыты." : "Облегчённый режим: на ленте видны выстрелянные патроны и остаток боевых и холостых."}${imHost ? "" : " <i>(режим выбирает хозяин)</i>"}</div>
   ${mine ? `<button class="btn ${mine.ready ? "ghost" : "primary"}" data-a="ready">${mine.ready ? "✓ Вы готовы · отменить готовность" : "🙋 Я готов"}</button>` : ""}
   <div class="modeinfo">${allReady ? "Все участники готовы. Можно начинать." : "Ожидаем готовности всех игроков."}</div>
   <button class="btn" data-a="addbot" ${S.players.length >= S.maxPlayers ? "disabled" : ""}>🎭 Добавить бота</button>
@@ -1113,14 +1187,28 @@ function seatHtml(p, i) {
   <div class="seat-meta"><span>${p.bot ? "Соперник · ИИ" : "Участник"}</span><span class="turn-label">${status}</span></div>
   <div class="hp">${p.alive ? pips + `<span class="hp-count">${p.hp}/${p.max} HP</span>` : '<span class="rip">⚰️ игрок выбыл</span>'}</div><div class="its${p.items.length > 5 ? " many" : ""}">${its || '<span class="dim">Предметов нет</span>'}</div>${selTarget === i ? '<span class="target-sight" aria-hidden="true"><i></i></span>' : ""}</div>`;
 }
+function remainText(st) {
+  // Остаток = объявленный состав − выстрелянное (типы видны на ленте). Инвертор меняет состав на ±1;
+  // исход знает только тот, кто видел патрон (invAdj), у остальных (invUnc) — набор возможных значений.
+  const tape = st.tape || [], rem = Math.max(0, (st.total || 0) - tape.length);
+  const base = (st.live0 || 0) - tape.filter(Boolean).length + (st.invAdj || 0), n = st.invUnc || 0;
+  let live = []; for (let d = -n; d <= n; d += 2) { const v = base + d; if (v >= 0 && v <= rem) live.push(v); }
+  if (!live.length) live = [Math.min(rem, Math.max(0, base))];
+  const blank = live.map(v => rem - v).sort((a, b) => a - b);
+  const orList = a => a.length === 1 ? String(a[0]) : a.slice(0, -1).join(", ") + " или " + a[a.length - 1];
+  return {rem, live, blank, exact: live.length === 1, text: `🔴×${orList(live)} ⚪×${orList(blank)}`};
+}
 function shellsHtml() {
   let h = "";
   const known = {}; (S.known || []).forEach(k => known[k.pos] = k.live);
+  const marks = S.invMarks || {};
   for (let i = 0; i < S.total; i++) {
     let c = "shell", t = "?";
     if (i < S.tape.length) c += " fired " + (S.tape[i] ? "live" : "blank");
     else { if (i === S.tape.length) c += " now"; if (i in known) { c += " kn " + (known[i] ? "live" : "blank"); t = "👁"; } }
-    h += `<div class="${c}">${t}</div>`;
+    // публично известно, что патрон переворачивали (исход видит только тот, кто в него подглядывал)
+    const inv = marks[i] ? `<b class="inv" title="Патрон переворачивали инвертором${marks[i] > 1 ? " ×" + marks[i] : ""}">🔄</b>` : "";
+    h += `<div class="${c}">${t}${inv}</div>`;
   }
   return h;
 }
@@ -1171,7 +1259,12 @@ function renderGame() {
   const turnOwner = S.players[S.turn];
   const stockAvatar = turnOwner ? (turnOwner.bot ? "♟" : [...(turnOwner.name || "?")].slice(0, 2).join("").toUpperCase()) : "";
   const charging = !loaded;
-  if (S.bel && !charging) cnt += ` → осталось: 🔴×${S.bel[0]} ⚪×${S.bel[1]}`;
+  let invNote = "";
+  if (!S.hardcore && S.tape && !charging) {
+    const r = remainText(S);
+    cnt += ` → осталось: ${r.text}`;
+    if (!r.exact) invNote = "<br><small>⚠ Применяли инвертор: точный остаток неизвестен, показаны возможные значения</small>";
+  }
   const keepI = $("#items"), sx = keepI ? keepI.scrollLeft : 0, mainEl = $(".main"), sy = mainEl ? mainEl.scrollTop : 0;
   let veil = "";
   const terminalDeferred = pendingEventBatches > 0 && (S.state === "between" || S.state === "over");
@@ -1218,7 +1311,7 @@ function renderGame() {
   <div class="main">${ffa ? "" : `<div class="score">${wins}</div>`}<div class="seats">${S.players.map(seatHtml).join("")}</div>
   <section class="gun" aria-label="Игровой стол и дробовик"><div class="scene-kicker"><span></span> ИГРОВОЙ СТОЛ <span></span></div><div class="gun-light"></div><div class="gun-plaque ttl">THE LAST ROUND</div>
   <div class="gun-weapon">${gunSvg(S.sawed, stockAvatar)}${!S.hardcore ? `<div class="shells shells-on-gun" aria-label="Лента оставшихся патронов над стволом">${shellsHtml()}</div>` : ""}</div><div class="gun-caption">${S.sawed ? "ОБРЕЗ · ДВА СТВОЛА" : "ДВУСТВОЛЬНЫЙ ДРОБОВИК"}</div>
-  <div class="gcount">${cnt}${S.hardcore ? "<br>💀 Остаток патронов скрыт" : ""}${S.hardcore && loaded && hintMode === "button" ? '<br><button class="btn ghost la-again" data-a="showload">📋 Напомнить состав</button>' : ""}${S.sawed ? "<br>🪚 Ствол обрезан — боевой выстрел = 2 урона" : ""}</div>
+  <div class="gcount">${cnt}${invNote}${S.hardcore ? "<br>💀 Остаток патронов скрыт" : ""}${S.hardcore && loaded && hintMode === "button" ? '<br><button class="btn ghost la-again" data-a="showload">📋 Напомнить состав</button>' : ""}${S.sawed ? "<br>🪚 Ствол обрезан — боевой выстрел = 2 урона" : ""}</div>
   </section><div class="log"><div class="loghead"><span>Последние события</span>${S.hardcore ? "" : '<button class="logmore" data-a="history">Вся история</button>'}</div>${logs}</div></div>${dockHtml()}${veil}`;
   const ni = $("#items"); if (ni) ni.scrollLeft = sx; const nm2 = $(".main"); if (nm2) nm2.scrollTop = sy;
   tickAfk();
@@ -1237,14 +1330,14 @@ function overlay(base, snap) {
   const o = Object.assign({}, base);
   o.state = "play"; o.turn = snap.turn; o.round = snap.round; o.sawed = snap.sawed;
   o.players = base.players.map((p, i) => Object.assign({}, p, snap.p[i] || {}));
-  if (!base.hardcore && snap.tape) { o.live0 = snap.live0; o.blank0 = snap.blank0; o.bel = snap.bel; o.tape = snap.tape; o.total = snap.total; o.left = snap.left; }
+  if (!base.hardcore && snap.tape) { o.live0 = snap.live0; o.blank0 = snap.blank0; o.bel = snap.bel; o.tape = snap.tape; o.total = snap.total; o.left = snap.left; o.invMarks = snap.inv || {}; }
   return o;
 }
 function preRoundView(final) {
   // Начало матча или раунда: стол уже виден, но ствол ещё не заряжен и предметов нет
   const o = Object.assign({}, final);
   o.state = "play"; o.sawed = false; o.live0 = 0; o.blank0 = 0;
-  if (!final.hardcore) { o.bel = [0, 0]; o.tape = []; o.total = 0; o.left = 0; }
+  if (!final.hardcore) { o.bel = [0, 0]; o.tape = []; o.total = 0; o.left = 0; o.invMarks = {}; }
   o.players = final.players.map(p => Object.assign({}, p, {items: [], cuffed: false, alive: true}));
   return o;
 }
@@ -1262,7 +1355,7 @@ function render() {
 }
 
 /* ───────── цикл опроса ───────── */
-function enter(code) { eventPlayback = Promise.resolve(); pendingEventBatches = 0; deferredLog = null; D = null; playFinal = null; clearAimFx(); document.querySelectorAll(".pov-threat, .load-announce").forEach(x => x.remove()); room = code; localStorage.setItem("bk_room", code); ver = -1; lastEv = null; S = null; selTarget = null; token++; closeModal(); loop(token); }
+function enter(code) { eventPlayback = Promise.resolve(); pendingEventBatches = 0; deferredLog = null; D = null; playFinal = null; clearAimFx(); document.querySelectorAll(".pov-threat, .load-announce, .blackout").forEach(x => x.remove()); restoreAudio(100); room = code; localStorage.setItem("bk_room", code); ver = -1; lastEv = null; S = null; selTarget = null; token++; closeModal(); loop(token); }
 async function loop(tk) {
   while (tk === token) {
     const r = await api("poll", {room, since: ver, pace: BOT_PACES[playSpeed] || BOT_PACES.slow});
@@ -1387,7 +1480,7 @@ const hintName = {off:"Скрыт", button:"По кнопке", always:"Всег
     <h4>Темп игры с ботом</h4><div class="settings-line"><span>Скорость</span><button class="btn" data-a="speed">${speedName[playSpeed] || "Медленная"} · изменить</button></div>
     <h4>Хардкор</h4><div class="settings-line"><span>Состав ствола после объявления</span><button class="btn" data-a="hint">${hintName[hintMode]} · изменить</button></div>
     <p class="dim">«Скрыт» — состав объявляется один раз крупно, потом нигде не показывается. «По кнопке» — под ружьём появляется кнопка «Напомнить состав». «Всегда на экране» — строка с составом остаётся (остаток патронов скрыт в любом случае).</p>
-    <h4>Визуальные эффекты</h4><div class="settings-line"><span>Кинематографичность</span><button class="btn" data-a="cinema">${cinemaName[cinemaMode] || "Полные"} · изменить</button></div>
+    <h4>Визуальные эффекты</h4><div class="settings-line"><span>Эффект вашей смерти: вспышка, затемнение, звон, вибрация</span><button class="btn" data-a="blackout">${blackoutOn ? "Включено" : "Выключено"} · изменить</button></div><div class="settings-line"><span>Кинематографичность</span><button class="btn" data-a="cinema">${cinemaName[cinemaMode] || "Полные"} · изменить</button></div>
     <div class="settings-line"><span>Плавные анимации</span><button class="btn ${smoothMotion ? "primary" : "ghost"}" data-a="motion">${smoothMotion ? "Включены" : "Выключены"}</button></div>
     ${!IS_TG && localStorage.getItem("bk_guest") ? `<h4>Игра без Telegram</h4><div class="settings-line"><span>Вы: ${esc(localStorage.getItem("bk_guest_name") || "Гость")}</span><button class="btn ghost" data-a="guestout">Сменить имя</button></div>` : ""}
     <h4>Звук</h4><div class="settings-line"><span>Звуковые эффекты</span><button class="btn ${muted ? "ghost" : "primary"}" data-a="snd">${muted ? "Выключены" : "Включены"}</button></div>
@@ -1418,6 +1511,7 @@ const H = {
     <button class="btn" data-a="home">🏠 В главное меню</button><button class="btn ghost" data-a="close">Закрыть</button>`)); },
   snd() { muted = !muted; localStorage.setItem("bk_mute", muted ? "1" : "0"); if (!muted) snd("click"); showSettings(); },
   speed() { playSpeed = ({slow:"normal",normal:"fast",fast:"slow"})[playSpeed] || "slow"; localStorage.setItem("bk_speed", playSpeed); showSettings(); },
+  blackout() { blackoutOn = !blackoutOn; localStorage.setItem("bk_blackout", blackoutOn ? "1" : "0"); showSettings(); },
   hint() { hintMode = ({off: "button", button: "always", always: "off"})[hintMode] || "off"; localStorage.setItem("bk_hint", hintMode); showSettings(); render(); },
   showload() { if (S && S.hardcore) showLoadCard(Number(S.live0) || 0, Number(S.blank0) || 0, false); },
   cinema() { cinemaMode = ({full:"reduced",reduced:"minimal",minimal:"full"})[cinemaMode] || "full"; localStorage.setItem("bk_cinema", cinemaMode); applyVisualSettings(); showSettings(); },
