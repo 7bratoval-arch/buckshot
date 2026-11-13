@@ -521,6 +521,25 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
 
 
+ASSETS = HERE / "assets"
+ASSET_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml",
+               ".mp3": "audio/mpeg", ".ogg": "audio/ogg"}
+
+
+def asset_path(rel: str):
+    """Файл из assets/ или None. Только плоские имена из безопасных символов: выйти из папки нельзя."""
+    name = urllib.parse.unquote(rel)
+    if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}", name):
+        return None
+    try:
+        p = (ASSETS / name).resolve()
+        if p.parent != ASSETS.resolve() or not p.is_file() or p.suffix.lower() not in ASSET_TYPES:
+            return None
+    except OSError:
+        return None
+    return p
+
+
 _INDEX = {"mtime": None, "raw": b"", "gz": b""}
 
 
@@ -552,6 +571,65 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _asset(self, rel: str, head: bool = False):
+        """Картинки и музыка. Поддерживает Range (без него аудио не работает в Safari/iOS), кэш и ETag."""
+        p = asset_path(rel)
+        if p is None:
+            return self._send(404, b"not found", "text/plain")
+        st = p.stat()
+        size = st.st_size
+        etag = f'"{size:x}-{int(st.st_mtime):x}"'
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            return
+        start, end, status = 0, size - 1, 200
+        rng = (self.headers.get("Range") or "").strip()
+        m = re.fullmatch(r"bytes=(\d*)-(\d*)", rng)
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1) == "":                       # bytes=-N: последние N байт
+                start = max(0, size - int(m.group(2)))
+            else:
+                start = int(m.group(1))
+                if m.group(2):
+                    end = min(end, int(m.group(2)))
+            if start >= size or start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                return
+            status = 206
+        length = end - start + 1
+        self.send_response(status)
+        self.send_header("Content-Type", ASSET_TYPES[p.suffix.lower()])
+        self.send_header("Content-Length", str(length))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.send_header("ETag", etag)
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        if head:
+            return
+        try:
+            with open(p, "rb") as f:
+                f.seek(start)
+                left = length
+                while left > 0:
+                    chunk = f.read(min(65536, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass                                        # клиент закрыл соединение (перемотка/выход): это нормально
+
     def _json(self, obj, code=200):
         self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
                    "application/json; charset=utf-8")
@@ -570,12 +648,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, b"index.html not found", "text/plain")
         elif path == "/health":
             self._send(200, b"ok", "text/plain")
+        elif path.startswith("/assets/"):
+            self._asset(path[len("/assets/"):])
         else:
             self._send(404, b"not found", "text/plain")
 
     def do_HEAD(self):
         # Мониторы (UptimeRobot и т.п.) часто шлют HEAD вместо GET
         path = urllib.parse.urlparse(self.path).path
+        if path.startswith("/assets/"):
+            return self._asset(path[len("/assets/"):], head=True)
         code = 200 if path in ("/", "/index.html", "/health") else 404
         self.send_response(code)
         self.send_header("Content-Length", "0")

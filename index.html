@@ -487,6 +487,26 @@ input{-webkit-user-select:text;user-select:text}
 .la-timer{height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:10px;overflow:hidden}
 .la-timer i{display:block;height:100%;background:#c9a15f;transform-origin:left}
 .la-again{margin-top:6px;font-size:13px;padding:8px 12px}
+/* Глаза: свечение и радужки мерцают как неисправная неоновая вывеска, изредка «моргают» (зелень гаснет на ~0,1 с) */
+.eyes{position:relative;display:block;width:100%;aspect-ratio:1000/406;pointer-events:none;user-select:none;-webkit-user-select:none}
+.eyes-in{position:absolute;inset:0}
+.eyes img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;-webkit-user-drag:none}
+.eyes .eg{opacity:.88;animation:eyes-glow 6.3s infinite}
+.eyes .ei{animation:eyes-iris 6.3s infinite}
+.eyes .el{opacity:.94}
+@keyframes eyes-glow{0%,100%{opacity:.85}7%{opacity:.35}8%{opacity:.95}11%{opacity:.5}13%{opacity:.9}38%{opacity:.7}40%{opacity:1}41%{opacity:.4}43%{opacity:.95}68%{opacity:.8}70%{opacity:.3}71%{opacity:.9}83%{opacity:.85}83.6%{opacity:.08}85.2%{opacity:.9}}
+@keyframes eyes-iris{0%,100%{opacity:1}7%{opacity:.6}8%{opacity:1}11%{opacity:.75}13%{opacity:1}41%{opacity:.65}43%{opacity:1}70%{opacity:.7}71%{opacity:1}83%{opacity:1}83.6%{opacity:.05}85.2%{opacity:1}}
+@keyframes eyes-beat{0%{scale:1}35%{scale:1.05}100%{scale:1}}
+@keyframes eyes-appear{to{opacity:1}}
+.eyes.beat .eyes-in{animation:eyes-beat .24s ease-out}   /* пульс на внутреннем слое: не сбивает появление самого блока */
+.home-eyes{width:min(84vw,340px);margin:0 auto 4px}
+.eyes.mini{display:inline-block;width:74px;vertical-align:middle;margin:-12px 6px -10px 0}
+.pov-eyes{position:absolute;left:50%;top:15%;width:min(84vw,400px);transform:translateX(-50%);opacity:.95}
+.pov-eyes{isolation:isolate}
+.pov-eyes::before{content:"";position:absolute;inset:-40% -12%;z-index:-1;background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,.9) 0,rgba(0,0,0,.65) 48%,transparent 74%)}   /* затемнение под глазами: чтобы не сливались с карточками игроков */
+.black-eyes{position:absolute;left:50%;top:46%;width:min(88vw,400px);transform:translate(-50%,-50%);opacity:0;animation:eyes-appear 1.2s .45s ease-out forwards}
+@media(prefers-reduced-motion:reduce){.eyes img,.eyes.beat .eyes-in{animation:none!important}.black-eyes{opacity:1;animation:none}}
+.motion-off .eyes img{animation:none}
 .fmt-card{margin:10px 0 2px;padding:12px 14px;border:1px solid var(--edge2);border-radius:12px;background:linear-gradient(145deg,rgba(40,24,21,.9),rgba(14,9,9,.9));text-align:left;display:grid;gap:4px}
 .fmt-card b{font-size:16px;letter-spacing:.04em;color:var(--bone)}
 .fmt-card span{font-size:13px;color:#d8c9b8;line-height:1.35}
@@ -605,7 +625,11 @@ let D = null, playFinal = null;
 
 /* ───────── звук и эффекты ───────── */
 let AC = null, muted = localStorage.getItem("bk_mute") === "1";
-let musicOn = localStorage.getItem("bk_music") === "1";
+let musicOn = localStorage.getItem("bk_music") !== "0";          // саундтрек включён по умолчанию
+const MUSIC_SRC = "/assets/music.mp3", MUSIC_LEVELS = [0.15, 0.3, 0.5], MUSIC_NAMES = {0.15: "Тихо", 0.3: "Средне", 0.5: "Громко"};
+let musicVol = MUSIC_LEVELS.includes(parseFloat(localStorage.getItem("bk_musicvol"))) ? parseFloat(localStorage.getItem("bk_musicvol")) : 0.3;
+let musicEl = null, musicGain = null, musicAvail = true;
+let vibeOn = localStorage.getItem("bk_vibe") !== "0";            // вибрация при выстрелах и смерти
 let playSpeed = localStorage.getItem("bk_speed") || "slow";
 let cinemaMode = localStorage.getItem("bk_cinema") || "full";   // «Полные» по умолчанию: ствол, направленный на камеру, виден всем
 let smoothMotion = localStorage.getItem("bk_motion") !== "0";
@@ -668,13 +692,13 @@ const SND = {
   win() { [523,659,784].forEach((f,i)=>setTimeout(()=>tone(f,.42,.18,"sine",f*1.02),i*130)); }
 };
 const snd = k => { try { SND[k](); } catch (e) {} };
-function setMusic(on) {
-  musicOn = !!on; localStorage.setItem("bk_music", musicOn ? "1" : "0");
-  const c = ctx();
-  if (!musicOn || !c) {
-    ambientNodes.forEach(n => { try { n.stop(); } catch(e) {} }); ambientNodes = []; ambientGain = null; return;
-  }
-  if (ambientNodes.length) return;
+const EYES = {glow: "/assets/eyes_glow.png", iris: "/assets/eyes_iris.png", lines: "/assets/eyes_lines.png"};
+// Глаза в темноте: свечение, радужки и контур — отдельные слои, чтобы мерцали только «горящие» части
+const eyesHtml = cls => `<div class="eyes ${cls || ""}" aria-hidden="true"><div class="eyes-in"><img class="eg" src="${EYES.glow}" alt="" draggable="false"><img class="ei" src="${EYES.iris}" alt="" draggable="false"><img class="el" src="${EYES.lines}" alt="" draggable="false"></div></div>`;
+function preloadEyes() { Object.values(EYES).forEach(u => { const i = new Image(); i.src = u; }); }
+function stopDrone() { ambientNodes.forEach(n => { try { n.stop(); } catch (e) {} }); ambientNodes = []; ambientGain = null; }
+function startDrone(c) {
+  // Запасной вариант, если файла музыки нет: тихий синтезированный гул
   ambientGain = c.createGain(); ambientGain.gain.value = 0.018;
   const filter = c.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 180;
   ambientGain.connect(filter); filter.connect(master(c));
@@ -682,7 +706,32 @@ function setMusic(on) {
     o.type = i === 1 ? "triangle" : "sine"; o.frequency.value = hz; g.gain.value = i === 0 ? 0.5 : 0.18;
     o.connect(g); g.connect(ambientGain); o.start(); ambientNodes.push(o); });
 }
-const haptic = s => { try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(s); } catch (e) {} };
+function syncMusic() {
+  // Играет саундтрек, если музыка включена, звук не выключен и вкладка видна.
+  // Звук идёт через мастер-громкость: затемнение при смерти глушит и музыку. Контекст создаёт первое касание.
+  const c = AC; if (!c) return;
+  const want = musicOn && !muted && !document.hidden;
+  if (!want) { if (musicEl) musicEl.pause(); stopDrone(); return; }
+  if (musicAvail) {
+    if (!musicEl) {
+      musicEl = new Audio(MUSIC_SRC); musicEl.loop = true; musicEl.preload = "auto";
+      musicEl.addEventListener("error", () => { musicAvail = false; musicEl = null; musicGain = null; syncMusic(); });
+      try { const src = c.createMediaElementSource(musicEl); musicGain = c.createGain(); musicGain.gain.value = musicVol; src.connect(musicGain); musicGain.connect(master(c)); } catch (e) {}
+    }
+    stopDrone(); musicEl.play().catch(() => {});
+  } else if (!ambientNodes.length) startDrone(c);
+}
+function setMusic(on) { musicOn = !!on; localStorage.setItem("bk_music", musicOn ? "1" : "0"); ctx(); syncMusic(); }
+document.addEventListener("visibilitychange", () => syncMusic());
+const haptic = s => { if (!vibeOn) return; try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(s); } catch (e) {} };
+const vibe = p => { if (!vibeOn) return; try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+function shotVibe(e, sawedBlast) {
+  // Выстрел «ощущается»: толчок и отдача. В вас — сильнее; обрез — самый тяжёлый; холостой — короткий щелчок.
+  const incoming = e.to === S.me && e.by !== S.me;
+  if (!e.live) { vibe(incoming ? [30, 45, 30] : [22]); return; }
+  vibe(sawedBlast ? [150, 35, 120, 30, 60] : incoming ? [130, 40, 90, 40, 45] : [110, 30, 55]);
+  if (incoming) { try { tg && tg.HapticFeedback && vibeOn && tg.HapticFeedback.notificationOccurred("error"); } catch (err) {} }
+}
 function fx(html, ms, cls) { const d = document.createElement("div"); d.className = "fxb " + (cls || ""); d.innerHTML = html;
   $("#fx").appendChild(d); setTimeout(() => d.remove(), ms); return d; }
 function flash(heavy = false) { const f = $("#flash"); f.classList.toggle("heavy", heavy); f.classList.remove("on"); void f.offsetWidth; f.classList.add("on"); }
@@ -817,7 +866,7 @@ function deathHaptics(ms) {
   const T = ms / 1000, beats = DEATH_BEATS.filter(([at]) => at < T - 0.25);
   haptic("heavy");
   try {
-    if (navigator.vibrate) {
+    if (navigator.vibrate && vibeOn) {
       const pat = [140]; let prev = 0.14;
       beats.forEach(([at, v]) => { const dur = v > 0.35 ? 45 : 30; pat.push(Math.max(10, Math.round((at - prev) * 1000)), dur); prev = at + dur / 1000; });
       navigator.vibrate(pat);
@@ -832,9 +881,12 @@ async function blackout() {
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const hold = calm ? 800 : playSpeed === "slow" ? 2500 : playSpeed === "normal" ? 2200 : 1900;
   const d = document.createElement("div"); d.className = "blackout" + (calm ? "" : " red"); d.setAttribute("aria-hidden", "true");
+  d.innerHTML = eyesHtml("black-eyes");   // во тьме на вас смотрят
   document.body.appendChild(d); cutAudio();
   if (!calm) setTimeout(() => d.classList.remove("red"), 85);          // доля секунды красного, затем чернота
   deathAudio(hold); deathHaptics(hold);
+  DEATH_BEATS.filter(([at]) => at < hold / 1000 - 0.25).forEach(([at]) => setTimeout(() => {   // глаза вспыхивают на каждый удар сердца
+    const el = d.querySelector(".eyes"); if (el) { el.classList.remove("beat"); void el.offsetWidth; el.classList.add("beat"); } }, at * 1000));
   await sleep(hold);
   restoreAudio(450); d.classList.add("lift");
   await sleep(calm ? 200 : 880);
@@ -1015,7 +1067,7 @@ async function shotFx(e) {
     directorToast(incoming ? `${nm(e.by)} НАПРАВИЛ ДРОБОВИК НА ВАС` : e.to === e.by ? `${nm(e.by)} НАПРАВИЛ ОРУЖИЕ НА СЕБЯ` : `${nm(e.by)} НАПРАВИЛ ОРУЖИЕ НА ${nm(e.to)}`);
     if (incoming && cinemaMode === "full" && smoothMotion && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       pov = document.createElement("div"); pov.className = "pov-threat";
-      pov.innerHTML = '<div class="pov-vignette"></div><div class="pov-muzzle"><i></i><b></b></div><div class="pov-label">СТВОЛ НАПРАВЛЕН НА ВАС</div>';
+      pov.innerHTML = '<div class="pov-vignette"></div>' + eyesHtml("pov-eyes") + '<div class="pov-muzzle"><i></i><b></b></div><div class="pov-label">СТВОЛ НАПРАВЛЕН НА ВАС</div>';
       document.body.appendChild(pov);
     }
     await sleep(playSpeed === "slow" ? 1450 : playSpeed === "normal" ? 1050 : 750);
@@ -1026,7 +1078,7 @@ async function shotFx(e) {
     if (e.live) {
       const sawedBlast = !!e.sawed || Number(e.dmg) > 1;
       if (gun) { gun.classList.remove("fire-blank"); gun.classList.add("fire-live", "muzzle-on"); if (sawedBlast) gun.classList.add("sawed-blast"); }
-      muzzleBurst(gun, sawedBlast); ejectCasing(gun, sawedBlast); flash(sawedBlast); shake(sawedBlast); snd(sawedBlast ? "sawboom" : "boom"); haptic("heavy");
+      muzzleBurst(gun, sawedBlast); ejectCasing(gun, sawedBlast); flash(sawedBlast); shake(sawedBlast); snd(sawedBlast ? "sawboom" : "boom"); haptic("heavy"); shotVibe(e, sawedBlast);
       if (pov) { pov.classList.add("pov-blast"); setTimeout(() => { if (pov && pov.isConnected) pov.remove(); }, 720); }
       if (card) { card.classList.remove("impact", "near-miss"); void card.offsetWidth; card.classList.add("impact"); floatAt(card, "−" + e.dmg); }
       // Летальный выстрел В ВАС (по снимку: жизней не осталось): он успевает прозвучать лишь мгновение,
@@ -1038,7 +1090,7 @@ async function shotFx(e) {
     } else {
       if (gun) { gun.classList.remove("fire-live", "muzzle-on"); gun.classList.add("fire-blank"); }
       if (card) { card.classList.remove("near-miss", "impact"); void card.offsetWidth; card.classList.add("near-miss"); }
-      snd("click"); haptic("light"); fx("ЩЁЛК!", 1000, "click"); await sleep(playSpeed === "slow" ? 1050 : playSpeed === "normal" ? 800 : 600);
+      shotVibe(e); snd("click"); haptic("light"); fx("ЩЁЛК!", 1000, "click"); await sleep(playSpeed === "slow" ? 1050 : playSpeed === "normal" ? 800 : 600);
     }
   } finally {
     if (pov && pov.isConnected) pov.remove();
@@ -1119,7 +1171,7 @@ function renderNoAuth() {
 }
 function renderLogin() {
   const saved = localStorage.getItem("bk_guest_name") || "";
-  APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
+  APP.html = `<div class="home">${eyesHtml("home-eyes")}<h1 class="ttl">Buckshot<br>Roulette</h1>
   <p class="tag">Играйте без Telegram: введите имя и садитесь за стол.</p>
   <div class="col"><input id="gname" class="gname" maxlength="24" placeholder="Ваше имя" autocomplete="nickname" value="${esc(saved)}">
   <button class="btn primary" data-a="guestgo">☠ Войти в игру</button>
@@ -1132,7 +1184,7 @@ function authFail() {
 }
 function renderHome() {
   S = null; D = null; room = null; token++; localStorage.removeItem("bk_room");
-  APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
+  APP.html = `<div class="home">${eyesHtml("home-eyes")}<h1 class="ttl">Buckshot<br>Roulette</h1>
   <p class="tag">Сырой подвал. Тусклая лампа.<br>Один дробовик на всех.</p>${gunSvg(false)}
   <div class="col"><button class="btn primary" data-a="create">☠ Накрыть стол</button>
   <button class="btn" data-a="vsbot">🎭 Сыграть против бота</button>
@@ -1244,7 +1296,7 @@ function dockHtml() {
   }
   const cur = S.players[S.turn];
   const afk = (!cur.bot) ? `<button class="btn ghost small" id="afkBtn" data-a="afk" style="margin:6px auto 0;display:block"></button>` : "";
-  return `<div class="dock"><div class="wt">${cur.bot ? "🎭" : "🕯"} Ходит <b>${esc(cur.name)}</b>${cur.bot ? " — молча взвешивает дробовик…" : ""}</div>${afk}${items}</div>`;
+  return `<div class="dock"><div class="wt">${cur.bot ? eyesHtml("mini") : "🕯"} Ходит <b>${esc(cur.name)}</b>${cur.bot ? " — молча взвешивает дробовик…" : ""}</div>${afk}${items}</div>`;
 }
 function renderGame() {
   const ffa = S.format === "ffa", aliveN = S.players.filter(p => p.alive).length;
@@ -1484,7 +1536,10 @@ const hintName = {off:"Скрыт", button:"По кнопке", always:"Всег
     <div class="settings-line"><span>Плавные анимации</span><button class="btn ${smoothMotion ? "primary" : "ghost"}" data-a="motion">${smoothMotion ? "Включены" : "Выключены"}</button></div>
     ${!IS_TG && localStorage.getItem("bk_guest") ? `<h4>Игра без Telegram</h4><div class="settings-line"><span>Вы: ${esc(localStorage.getItem("bk_guest_name") || "Гость")}</span><button class="btn ghost" data-a="guestout">Сменить имя</button></div>` : ""}
     <h4>Звук</h4><div class="settings-line"><span>Звуковые эффекты</span><button class="btn ${muted ? "ghost" : "primary"}" data-a="snd">${muted ? "Выключены" : "Включены"}</button></div>
-    <div class="settings-line"><span>Фоновая атмосфера</span><button class="btn ${musicOn ? "primary" : "ghost"}" data-a="music">${musicOn ? "Включена" : "Выключена"}</button></div>
+    <div class="settings-line"><span>Музыка</span><button class="btn ${musicOn ? "primary" : "ghost"}" data-a="music">${musicOn ? "Включена" : "Выключена"}</button></div>
+    <div class="settings-line"><span>Громкость музыки</span><button class="btn" data-a="musicvol">${MUSIC_NAMES[musicVol]} · изменить</button></div>
+    <div class="settings-line"><span>Вибрация (выстрелы, смерть)</span><button class="btn ${vibeOn ? "primary" : "ghost"}" data-a="vibe">${vibeOn ? "Включена" : "Выключена"}</button></div>
+    <p class="dim">Вибрация работает на Android (в браузере и в Telegram); на iPhone — только тактильный отклик Telegram.</p>
     <div class="settings-line"><span>Громкость эффектов</span><button class="btn" data-a="volume">${Math.round(sfxVolume*100)}% · изменить</button></div>
     <div class="settings-line"><span>Проверка звука</span><button class="btn ghost" data-a="soundtest">▶ Прослушать</button></div>
     <p class="dim">Настройки сохраняются на этом устройстве. Системная настройка «Уменьшение движения» имеет приоритет над анимациями.</p><button class="btn ghost" data-a="close">Закрыть</button>`));
@@ -1509,7 +1564,7 @@ const H = {
     <button class="btn" data-a="profile">👤 Профиль</button><button class="btn" data-a="leaderboard">🏆 Рейтинг</button><button class="btn" data-a="matches">📜 История матчей</button>
     <button class="btn" data-a="settings">⚙️ Настройки игры</button>
     <button class="btn" data-a="home">🏠 В главное меню</button><button class="btn ghost" data-a="close">Закрыть</button>`)); },
-  snd() { muted = !muted; localStorage.setItem("bk_mute", muted ? "1" : "0"); if (!muted) snd("click"); showSettings(); },
+  snd() { muted = !muted; localStorage.setItem("bk_mute", muted ? "1" : "0"); if (!muted) snd("click"); syncMusic(); showSettings(); },
   speed() { playSpeed = ({slow:"normal",normal:"fast",fast:"slow"})[playSpeed] || "slow"; localStorage.setItem("bk_speed", playSpeed); showSettings(); },
   blackout() { blackoutOn = !blackoutOn; localStorage.setItem("bk_blackout", blackoutOn ? "1" : "0"); showSettings(); },
   hint() { hintMode = ({off: "button", button: "always", always: "off"})[hintMode] || "off"; localStorage.setItem("bk_hint", hintMode); showSettings(); render(); },
@@ -1517,6 +1572,8 @@ const H = {
   cinema() { cinemaMode = ({full:"reduced",reduced:"minimal",minimal:"full"})[cinemaMode] || "full"; localStorage.setItem("bk_cinema", cinemaMode); applyVisualSettings(); showSettings(); },
   motion() { smoothMotion = !smoothMotion; localStorage.setItem("bk_motion", smoothMotion ? "1" : "0"); applyVisualSettings(); showSettings(); },
   music() { setMusic(!musicOn); showSettings(); },
+  musicvol() { musicVol = MUSIC_LEVELS[(MUSIC_LEVELS.indexOf(musicVol) + 1) % MUSIC_LEVELS.length]; localStorage.setItem("bk_musicvol", String(musicVol)); if (musicGain && AC) musicGain.gain.setTargetAtTime(musicVol, AC.currentTime, 0.05); showSettings(); },
+  vibe() { vibeOn = !vibeOn; localStorage.setItem("bk_vibe", vibeOn ? "1" : "0"); if (vibeOn) vibe([60]); showSettings(); },
   volume() { sfxVolume = sfxVolume >= 0.95 ? 0.4 : sfxVolume + 0.3; localStorage.setItem("bk_sfx_volume", String(sfxVolume)); showSettings(); },
   soundtest() { snd("boom"); setTimeout(()=>snd("load"),650); },
   home() { closeModal(); renderHome(); },
@@ -1578,10 +1635,11 @@ const H = {
 };
 function inviteLink() { return IS_TG && S && S.bot ? `https://t.me/${S.bot}?start=room_${S.code}` : `${location.origin}/?room=${S.code}`; }
 document.addEventListener("click", e => { const el = e.target.closest("[data-a]"); if (!el) return;
-  const f = H[el.dataset.a]; if (f) { ctx(); if (musicOn && !ambientNodes.length) setMusic(true); f(el.dataset); } });
+  const f = H[el.dataset.a]; if (f) { ctx(); syncMusic(); f(el.dataset); } });
 
 /* ───────── старт ───────── */
 async function boot() {
+  preloadEyes();
   if (!INIT) { const g = localStorage.getItem("bk_guest"); if (g) INIT = g; }
   if (!INIT) { renderLogin(); return; }
   const q = new URLSearchParams(location.search);
