@@ -487,26 +487,6 @@ input{-webkit-user-select:text;user-select:text}
 .la-timer{height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:10px;overflow:hidden}
 .la-timer i{display:block;height:100%;background:#c9a15f;transform-origin:left}
 .la-again{margin-top:6px;font-size:13px;padding:8px 12px}
-/* Глаза: свечение и радужки мерцают как неисправная неоновая вывеска, изредка «моргают» (зелень гаснет на ~0,1 с) */
-.eyes{position:relative;display:block;width:100%;aspect-ratio:1000/406;pointer-events:none;user-select:none;-webkit-user-select:none}
-.eyes-in{position:absolute;inset:0}
-.eyes img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;-webkit-user-drag:none}
-.eyes .eg{opacity:.88;animation:eyes-glow 6.3s infinite}
-.eyes .ei{animation:eyes-iris 6.3s infinite}
-.eyes .el{opacity:.94}
-@keyframes eyes-glow{0%,100%{opacity:.85}7%{opacity:.35}8%{opacity:.95}11%{opacity:.5}13%{opacity:.9}38%{opacity:.7}40%{opacity:1}41%{opacity:.4}43%{opacity:.95}68%{opacity:.8}70%{opacity:.3}71%{opacity:.9}83%{opacity:.85}83.6%{opacity:.08}85.2%{opacity:.9}}
-@keyframes eyes-iris{0%,100%{opacity:1}7%{opacity:.6}8%{opacity:1}11%{opacity:.75}13%{opacity:1}41%{opacity:.65}43%{opacity:1}70%{opacity:.7}71%{opacity:1}83%{opacity:1}83.6%{opacity:.05}85.2%{opacity:1}}
-@keyframes eyes-beat{0%{scale:1}35%{scale:1.05}100%{scale:1}}
-@keyframes eyes-appear{to{opacity:1}}
-.eyes.beat .eyes-in{animation:eyes-beat .24s ease-out}   /* пульс на внутреннем слое: не сбивает появление самого блока */
-.home-eyes{width:min(84vw,340px);margin:0 auto 4px}
-.eyes.mini{display:inline-block;width:74px;vertical-align:middle;margin:-12px 6px -10px 0}
-.pov-eyes{position:absolute;left:50%;top:15%;width:min(84vw,400px);transform:translateX(-50%);opacity:.95}
-.pov-eyes{isolation:isolate}
-.pov-eyes::before{content:"";position:absolute;inset:-40% -12%;z-index:-1;background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,.9) 0,rgba(0,0,0,.65) 48%,transparent 74%)}   /* затемнение под глазами: чтобы не сливались с карточками игроков */
-.black-eyes{position:absolute;left:50%;top:46%;width:min(88vw,400px);transform:translate(-50%,-50%);opacity:0;animation:eyes-appear 1.2s .45s ease-out forwards}
-@media(prefers-reduced-motion:reduce){.eyes img,.eyes.beat .eyes-in{animation:none!important}.black-eyes{opacity:1;animation:none}}
-.motion-off .eyes img{animation:none}
 .fmt-card{margin:10px 0 2px;padding:12px 14px;border:1px solid var(--edge2);border-radius:12px;background:linear-gradient(145deg,rgba(40,24,21,.9),rgba(14,9,9,.9));text-align:left;display:grid;gap:4px}
 .fmt-card b{font-size:16px;letter-spacing:.04em;color:var(--bone)}
 .fmt-card span{font-size:13px;color:#d8c9b8;line-height:1.35}
@@ -692,10 +672,6 @@ const SND = {
   win() { [523,659,784].forEach((f,i)=>setTimeout(()=>tone(f,.42,.18,"sine",f*1.02),i*130)); }
 };
 const snd = k => { try { SND[k](); } catch (e) {} };
-const EYES = {glow: "/assets/eyes_glow.png", iris: "/assets/eyes_iris.png", lines: "/assets/eyes_lines.png"};
-// Глаза в темноте: свечение, радужки и контур — отдельные слои, чтобы мерцали только «горящие» части
-const eyesHtml = cls => `<div class="eyes ${cls || ""}" aria-hidden="true"><div class="eyes-in"><img class="eg" src="${EYES.glow}" alt="" draggable="false"><img class="ei" src="${EYES.iris}" alt="" draggable="false"><img class="el" src="${EYES.lines}" alt="" draggable="false"></div></div>`;
-function preloadEyes() { Object.values(EYES).forEach(u => { const i = new Image(); i.src = u; }); }
 function stopDrone() { ambientNodes.forEach(n => { try { n.stop(); } catch (e) {} }); ambientNodes = []; ambientGain = null; }
 function startDrone(c) {
   // Запасной вариант, если файла музыки нет: тихий синтезированный гул
@@ -881,12 +857,9 @@ async function blackout() {
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const hold = calm ? 800 : playSpeed === "slow" ? 2500 : playSpeed === "normal" ? 2200 : 1900;
   const d = document.createElement("div"); d.className = "blackout" + (calm ? "" : " red"); d.setAttribute("aria-hidden", "true");
-  d.innerHTML = eyesHtml("black-eyes");   // во тьме на вас смотрят
   document.body.appendChild(d); cutAudio();
   if (!calm) setTimeout(() => d.classList.remove("red"), 85);          // доля секунды красного, затем чернота
   deathAudio(hold); deathHaptics(hold);
-  DEATH_BEATS.filter(([at]) => at < hold / 1000 - 0.25).forEach(([at]) => setTimeout(() => {   // глаза вспыхивают на каждый удар сердца
-    const el = d.querySelector(".eyes"); if (el) { el.classList.remove("beat"); void el.offsetWidth; el.classList.add("beat"); } }, at * 1000));
   await sleep(hold);
   restoreAudio(450); d.classList.add("lift");
   await sleep(calm ? 200 : 880);
@@ -1067,7 +1040,7 @@ async function shotFx(e) {
     directorToast(incoming ? `${nm(e.by)} НАПРАВИЛ ДРОБОВИК НА ВАС` : e.to === e.by ? `${nm(e.by)} НАПРАВИЛ ОРУЖИЕ НА СЕБЯ` : `${nm(e.by)} НАПРАВИЛ ОРУЖИЕ НА ${nm(e.to)}`);
     if (incoming && cinemaMode === "full" && smoothMotion && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       pov = document.createElement("div"); pov.className = "pov-threat";
-      pov.innerHTML = '<div class="pov-vignette"></div>' + eyesHtml("pov-eyes") + '<div class="pov-muzzle"><i></i><b></b></div><div class="pov-label">СТВОЛ НАПРАВЛЕН НА ВАС</div>';
+      pov.innerHTML = '<div class="pov-vignette"></div><div class="pov-muzzle"><i></i><b></b></div><div class="pov-label">СТВОЛ НАПРАВЛЕН НА ВАС</div>';
       document.body.appendChild(pov);
     }
     await sleep(playSpeed === "slow" ? 1450 : playSpeed === "normal" ? 1050 : 750);
@@ -1171,7 +1144,7 @@ function renderNoAuth() {
 }
 function renderLogin() {
   const saved = localStorage.getItem("bk_guest_name") || "";
-  APP.html = `<div class="home">${eyesHtml("home-eyes")}<h1 class="ttl">Buckshot<br>Roulette</h1>
+  APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
   <p class="tag">Играйте без Telegram: введите имя и садитесь за стол.</p>
   <div class="col"><input id="gname" class="gname" maxlength="24" placeholder="Ваше имя" autocomplete="nickname" value="${esc(saved)}">
   <button class="btn primary" data-a="guestgo">☠ Войти в игру</button>
@@ -1184,7 +1157,7 @@ function authFail() {
 }
 function renderHome() {
   S = null; D = null; room = null; token++; localStorage.removeItem("bk_room");
-  APP.html = `<div class="home">${eyesHtml("home-eyes")}<h1 class="ttl">Buckshot<br>Roulette</h1>
+  APP.html = `<div class="home"><div class="skull">☠️</div><h1 class="ttl">Buckshot<br>Roulette</h1>
   <p class="tag">Сырой подвал. Тусклая лампа.<br>Один дробовик на всех.</p>${gunSvg(false)}
   <div class="col"><button class="btn primary" data-a="create">☠ Накрыть стол</button>
   <button class="btn" data-a="vsbot">🎭 Сыграть против бота</button>
@@ -1296,7 +1269,7 @@ function dockHtml() {
   }
   const cur = S.players[S.turn];
   const afk = (!cur.bot) ? `<button class="btn ghost small" id="afkBtn" data-a="afk" style="margin:6px auto 0;display:block"></button>` : "";
-  return `<div class="dock"><div class="wt">${cur.bot ? eyesHtml("mini") : "🕯"} Ходит <b>${esc(cur.name)}</b>${cur.bot ? " — молча взвешивает дробовик…" : ""}</div>${afk}${items}</div>`;
+  return `<div class="dock"><div class="wt">${cur.bot ? "🎭" : "🕯"} Ходит <b>${esc(cur.name)}</b>${cur.bot ? " — молча взвешивает дробовик…" : ""}</div>${afk}${items}</div>`;
 }
 function renderGame() {
   const ffa = S.format === "ffa", aliveN = S.players.filter(p => p.alive).length;
@@ -1639,7 +1612,6 @@ document.addEventListener("click", e => { const el = e.target.closest("[data-a]"
 
 /* ───────── старт ───────── */
 async function boot() {
-  preloadEyes();
   if (!INIT) { const g = localStorage.getItem("bk_guest"); if (g) INIT = g; }
   if (!INIT) { renderLogin(); return; }
   const q = new URLSearchParams(location.search);
